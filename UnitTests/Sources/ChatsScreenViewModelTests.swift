@@ -53,31 +53,3 @@ struct ChatsScreenViewModelTests {
         cancellable.cancel()
     }
 }
-
-// MARK: - Helpers
-
-struct Setup {
-    let rooms = CurrentValueSubject<[RoomSummary], Never>([])
-    let syncState = CurrentValueSubject<SyncState, Never>(.running)
-    let verification = CurrentValueSubject<SessionVerification, Never>(.verified)
-    let actions = PassthroughSubject<ClientProxyAction, Never>()
-    let clientProxy = ClientProxyMock()
-
-    init() {
-        let provider = RoomSummaryProviderMock()
-        provider.roomsPublisher = rooms.eraseToAnyPublisher()
-        clientProxy.roomSummaryProvider = provider
-        clientProxy.syncStatePublisher = syncState.eraseToAnyPublisher()
-        clientProxy.verificationStatePublisher = verification.eraseToAnyPublisher()
-        clientProxy.actionsPublisher = actions.eraseToAnyPublisher()
-        clientProxy.userID = "@me:example.org"
-        clientProxy.loadDisplayNameReturnValue = "Me"
-    }
-}
-
-extension RoomSummary {
-    static func fixture(id: String, name: String, isDirect: Bool = true, unreadCount: Int = 0) -> RoomSummary {
-        RoomSummary(id: id, name: name, avatarURL: nil, isDirect: isDirect, lastMessage: "Hello", lastMessageDate: .now,
-                    unreadCount: unreadCount, hasUnreadMentions: false, isMarkedUnread: false)
-    }
-}

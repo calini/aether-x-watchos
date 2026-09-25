@@ -58,6 +58,8 @@ struct ChatsScreen_Previews: PreviewProvider {
             .previewDisplayName("Rooms")
         NavigationStack { ChatsScreen(context: makeViewModel(rooms: rooms, syncState: .offline).context) }
             .previewDisplayName("Offline")
+        NavigationStack { ChatsScreen(context: makeViewModel(rooms: rooms, syncState: .error).context) }
+            .previewDisplayName("Connecting")
         NavigationStack { ChatsScreen(context: makeViewModel(rooms: [], syncState: .running).context) }
             .previewDisplayName("Empty")
         NavigationStack { ChatsScreen(context: makeViewModel(rooms: nil, syncState: .running).context) }

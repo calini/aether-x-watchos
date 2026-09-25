@@ -48,10 +48,18 @@ struct SettingsScreen_Previews: PreviewProvider {
         return viewModel
     }
 
+    static var checkingVerification: SettingsScreenViewModel {
+        let viewModel = SettingsScreenViewModel(clientProxy: ClientProxyMock.preview)
+        viewModel.state.verification = .unknown
+        return viewModel
+    }
+
     static var previews: some View {
         NavigationStack { SettingsScreen(context: SettingsScreenViewModel(clientProxy: ClientProxyMock.preview).context) }
             .previewDisplayName("Verified")
         NavigationStack { SettingsScreen(context: unverified.context) }
             .previewDisplayName("Unverified")
+        NavigationStack { SettingsScreen(context: checkingVerification.context) }
+            .previewDisplayName("Checking verification")
     }
 }
