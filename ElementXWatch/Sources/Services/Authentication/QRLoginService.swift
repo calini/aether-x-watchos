@@ -93,6 +93,8 @@ final class QRLoginService: QRLoginServiceProtocol {
     func loginWithGeneratedQRCode(onProgress: @escaping @MainActor (QRLoginProgress) -> Void) async -> Result<ClientProxyProtocol, QRLoginError> {
         let directories = SessionDirectories()
         let passphrase = Self.makePassphrase()
+        // Only this attempt's own save should ever be cleared; an error before it must not touch an existing session.
+        var didSaveSession = false
 
         do {
             try directories.create()
@@ -113,6 +115,7 @@ final class QRLoginService: QRLoginServiceProtocol {
                                                 sessionDirectories: directories,
                                                 passphrase: passphrase,
                                                 pusherNotificationClientIdentifier: nil))
+            didSaveSession = true
             let userID = try client.userId()
             MXLog.info("QR login succeeded for \(userID)")
             return .success(try await ClientProxy.make(client: client))
@@ -125,8 +128,12 @@ final class QRLoginService: QRLoginServiceProtocol {
             return .failure(.cancelled)
         } catch {
             MXLog.error("QR login failed unexpectedly: \(error)")
-            sessionStore.clear()
-            directories.delete()
+            if didSaveSession {
+                // clear() already deletes the saved token's directories, which are this attempt's directories.
+                sessionStore.clear()
+            } else {
+                directories.delete()
+            }
             return .failure(.unknown)
         }
     }
