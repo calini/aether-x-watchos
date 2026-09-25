@@ -10,3 +10,6 @@ Source commit: `ad1d7a301` (element-x-ios `develop`, 2026-09-25). Licence: AGPL-
 | `ElementXWatch/Sources/Other/SwiftUI/BindableState.swift` | `ElementX/Sources/Other/SwiftUI/ViewModel/BindableState.swift` | None. |
 | `ElementXWatch/Sources/Other/SwiftUI/StateStoreViewModelV2.swift` | `ElementX/Sources/Other/SwiftUI/ViewModel/StateStoreViewModelV2.swift` | Removed media provider and content scanner. |
 | `ElementXWatch/Sources/Other/CoordinatorProtocol.swift` | `ElementX/Sources/Application/CoordinatorProtocol.swift` | None. |
+| `ElementXWatch/Sources/Services/Session/SessionDirectories.swift` | `ElementX/Sources/Services/UserSession/SessionDirectories.swift` | Removed transient-data deletion and the legacy init; added `create()` and watch base directories. |
+| `ElementXWatch/Sources/Services/Session/RestorationToken.swift` | `ElementX/Sources/Services/UserSession/RestorationToken.swift` | A cache directory is required (no legacy single-directory tokens). |
+| `ElementXWatch/Sources/Services/Session/SessionDelegate.swift` | `ElementX/Sources/Services/UserSession/UserSessionStore.swift` (client session delegate) | Single-account keychain store. |
