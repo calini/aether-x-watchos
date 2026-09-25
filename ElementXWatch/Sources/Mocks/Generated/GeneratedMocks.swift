@@ -183,6 +183,31 @@ nonisolated class KeychainStoreMock: KeychainStoreProtocol, @unchecked Sendable 
         removeRestorationTokenClosure?()
     }
 }
+nonisolated class RoomSummaryProviderMock: RoomSummaryProviderProtocol, @unchecked Sendable {
+    var roomsPublisher: AnyPublisher<[RoomSummary], Never> {
+        get { return underlyingRoomsPublisher }
+        set(value) { underlyingRoomsPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingRoomsPublisher: AnyPublisher<[RoomSummary], Never>!
+
+    //MARK: - start
+
+    private let startCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startUnderlyingCallsCount = 0
+    var startCallsCount: Int {
+        get { startCallsCountLock.withLock { startUnderlyingCallsCount } }
+        set { startCallsCountLock.withLock { startUnderlyingCallsCount = newValue } }
+    }
+    var startCalled: Bool {
+        return startCallsCount > 0
+    }
+    nonisolated(unsafe) var startClosure: (() async -> Void)?
+
+    @concurrent func start() async {
+        startCallsCountLock.withLock { startUnderlyingCallsCount += 1 }
+        await startClosure?()
+    }
+}
 nonisolated class SessionStoreMock: SessionStoreProtocol, @unchecked Sendable {
     var hasSession: Bool {
         get { return underlyingHasSession }
