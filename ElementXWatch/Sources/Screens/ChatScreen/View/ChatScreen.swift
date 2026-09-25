@@ -14,12 +14,7 @@ struct ChatScreen: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
-                if !context.viewState.reachedStart {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .accessibilityLabel(WatchStrings.loadingOlder)
-                        .onAppear { context.send(viewAction: .paginateBackwards) }
-                }
+                paginationRow
                 ForEach(context.viewState.items) { item in
                     row(for: item)
                 }
@@ -35,7 +30,12 @@ struct ChatScreen: View {
                                  onReply: { context.send(viewAction: .reply(item)) })
         }
         .alert(context.viewState.bindings.errorMessage ?? "", isPresented: isShowingError) {
-            Button(WatchStrings.ok) { context.send(viewAction: .dismissError) }
+            if context.viewState.draft != nil {
+                Button(WatchStrings.tryAgain) { context.send(viewAction: .retryDraft) }
+                Button(WatchStrings.cancel, role: .cancel) { context.send(viewAction: .cancelDraft) }
+            } else {
+                Button(WatchStrings.ok) { context.send(viewAction: .dismissError) }
+            }
         }
     }
 
@@ -54,6 +54,28 @@ struct ChatScreen: View {
                 .frame(maxWidth: .infinity)
         case .readMarker, .timelineStart, .hidden:
             EmptyView()
+        }
+    }
+
+    /// Loads older messages while the spinner is visible, re-triggering as each new oldest item
+    /// arrives (a page can add only hidden state events, so `.onAppear` alone can stall forever).
+    @ViewBuilder
+    private var paginationRow: some View {
+        if !context.viewState.reachedStart {
+            if context.viewState.paginationFailed {
+                Text(WatchStrings.loadOlderMessages)
+                    .font(.caption2)
+                    .foregroundStyle(Color.compound.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .onTapGesture { context.send(viewAction: .paginateBackwards) }
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel(WatchStrings.loadingOlder)
+                    .task(id: context.viewState.items.first?.id) {
+                        context.send(viewAction: .paginateBackwards)
+                    }
+            }
         }
     }
 
@@ -101,6 +123,31 @@ struct ChatScreen_Previews: PreviewProvider {
         return viewModel
     }
 
+    static var loadingOlder: ChatScreenViewModel {
+        let viewModel = makeViewModel(isDirect: true)
+        viewModel.state.reachedStart = false
+        return viewModel
+    }
+
+    static var paginationFailed: ChatScreenViewModel {
+        let viewModel = makeViewModel(isDirect: true)
+        viewModel.state.reachedStart = false
+        viewModel.state.paginationFailed = true
+        return viewModel
+    }
+
+    static var sendingMessage: ChatScreenViewModel {
+        let viewModel = makeViewModel(isDirect: true)
+        viewModel.state.items = [makeItem("5", "On my way", own: true, sendState: .sending)]
+        return viewModel
+    }
+
+    static var empty: ChatScreenViewModel {
+        let viewModel = makeViewModel(isDirect: true)
+        viewModel.state.items = []
+        return viewModel
+    }
+
     static var previews: some View {
         NavigationStack { ChatScreen(context: makeViewModel(isDirect: true).context) }
             .previewDisplayName("DM")
@@ -108,6 +155,14 @@ struct ChatScreen_Previews: PreviewProvider {
             .previewDisplayName("Group")
         NavigationStack { ChatScreen(context: replying.context) }
             .previewDisplayName("Replying")
+        NavigationStack { ChatScreen(context: loadingOlder.context) }
+            .previewDisplayName("Loading older")
+        NavigationStack { ChatScreen(context: paginationFailed.context) }
+            .previewDisplayName("Pagination failed")
+        NavigationStack { ChatScreen(context: sendingMessage.context) }
+            .previewDisplayName("Sending")
+        NavigationStack { ChatScreen(context: empty.context) }
+            .previewDisplayName("Empty")
     }
 
     static func makeItem(_ id: String, _ text: String, own: Bool, body: TimelineItemBody? = nil,
@@ -121,6 +176,8 @@ struct ChatScreen_Previews: PreviewProvider {
     static func makeViewModel(isDirect: Bool) -> ChatScreenViewModel {
         let proxy = TimelineProxyMock()
         proxy.itemsPublisher = Just(items).eraseToAnyPublisher()
+        // The "Loading older" preview's spinner drives a real `.paginateBackwards` via `.task`.
+        proxy.paginateBackwardsReturnValue = .success(false)
         let viewModel = ChatScreenViewModel(roomName: isDirect ? "Bob" : "Climbing crew", isDirect: isDirect, timelineProxy: proxy)
         viewModel.state.items = items
         viewModel.state.reachedStart = true

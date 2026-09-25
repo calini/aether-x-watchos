@@ -56,6 +56,28 @@ struct ChatScreenViewModelTests {
         viewModel.context.send(viewAction: .send("Hello"))
 
         try await waitUntil { viewModel.context.viewState.bindings.errorMessage == WatchStrings.sendFailed }
+        #expect(viewModel.context.viewState.draft == ChatDraft(text: "Hello", replyingTo: nil))
+    }
+
+    @Test
+    func retryDraftResendsTheSameMessageAndReplyTarget() async throws {
+        let (viewModel, proxy, _) = makeViewModel()
+        proxy.sendMessageInReplyToReturnValue = .failure(.sdkError("offline"))
+        let target = EventItem.fixture(eventID: "$target")
+
+        viewModel.context.send(viewAction: .reply(target))
+        viewModel.context.send(viewAction: .send("On my way"))
+        try await waitUntil { viewModel.context.viewState.bindings.errorMessage == WatchStrings.sendFailed }
+        #expect(viewModel.context.viewState.replyingTo == target)
+
+        proxy.sendMessageInReplyToReturnValue = .success(())
+        viewModel.context.send(viewAction: .retryDraft)
+
+        try await waitUntil { proxy.sendMessageInReplyToCallsCount == 2 }
+        #expect(proxy.sendMessageInReplyToReceivedArguments?.message == "On my way")
+        #expect(proxy.sendMessageInReplyToReceivedArguments?.eventID == "$target")
+        try await waitUntil { viewModel.context.viewState.draft == nil }
+        #expect(viewModel.context.viewState.replyingTo == nil)
     }
 
     @Test
@@ -68,7 +90,7 @@ struct ChatScreenViewModelTests {
 
         try await waitUntil { proxy.retrySendCallsCount == 1 }
         #expect(proxy.retrySendReceivedItemID == failed.itemID)
-        try await waitUntil { viewModel.context.viewState.bindings.errorMessage == WatchStrings.sendFailed }
+        try await waitUntil { viewModel.context.viewState.bindings.errorMessage == WatchStrings.resendFailed }
     }
 
     @Test
@@ -98,6 +120,21 @@ struct ChatScreenViewModelTests {
 
         #expect(proxy.paginateBackwardsCallsCount == 1)
         #expect(!viewModel.context.viewState.isPaginating)
+    }
+
+    @Test
+    func paginationFailuresCanBeRetried() async throws {
+        let (viewModel, proxy, _) = makeViewModel()
+        proxy.paginateBackwardsReturnValue = .failure(.sdkError("offline"))
+
+        viewModel.context.send(viewAction: .paginateBackwards)
+
+        try await waitUntil { viewModel.context.viewState.paginationFailed }
+        #expect(!viewModel.context.viewState.reachedStart)
+
+        viewModel.context.send(viewAction: .paginateBackwards)
+
+        try await waitUntil { proxy.paginateBackwardsCallsCount == 2 }
     }
 
     // MARK: - Helpers

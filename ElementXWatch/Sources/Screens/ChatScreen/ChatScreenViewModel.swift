@@ -45,6 +45,11 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             Task { _ = await timelineProxy.toggleReaction(key, to: item.itemID) }
         case .retry(let item):
             retry(item)
+        case .retryDraft:
+            retryDraft()
+        case .cancelDraft:
+            state.draft = nil
+            state.bindings.errorMessage = nil
         case .dismissError:
             state.bindings.errorMessage = nil
         }
@@ -72,11 +77,15 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
     private func paginateBackwards() {
         guard !state.isPaginating, !state.reachedStart else { return }
         state.isPaginating = true
+        state.paginationFailed = false
         Task {
             let result = await timelineProxy.paginateBackwards()
             state.isPaginating = false
-            if case .success(let reachedStart) = result {
+            switch result {
+            case .success(let reachedStart):
                 state.reachedStart = reachedStart
+            case .failure:
+                state.paginationFailed = true
             }
         }
     }
@@ -85,10 +94,14 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else { return }
 
-        let replyEventID = state.replyingTo?.eventID
+        let replyTarget = state.replyingTo
         state.replyingTo = nil
         Task {
-            if case .failure = await timelineProxy.send(message: message, inReplyTo: replyEventID) {
+            if case .failure = await timelineProxy.send(message: message, inReplyTo: replyTarget?.eventID) {
+                // No local echo exists for a message that never enqueued, so the text would
+                // otherwise be lost; keep it as a draft the user can retry without retyping it.
+                state.replyingTo = replyTarget
+                state.draft = ChatDraft(text: message, replyingTo: replyTarget)
                 state.bindings.errorMessage = WatchStrings.sendFailed
             }
         }
@@ -97,7 +110,19 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
     private func retry(_ item: EventItem) {
         Task {
             if case .failure = await timelineProxy.retrySend(item.itemID) {
+                state.bindings.errorMessage = WatchStrings.resendFailed
+            }
+        }
+    }
+
+    private func retryDraft() {
+        guard let draft = state.draft else { return }
+        Task {
+            if case .failure = await timelineProxy.send(message: draft.text, inReplyTo: draft.replyingTo?.eventID) {
                 state.bindings.errorMessage = WatchStrings.sendFailed
+            } else {
+                state.draft = nil
+                state.replyingTo = nil
             }
         }
     }

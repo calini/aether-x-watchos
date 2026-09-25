@@ -11,9 +11,19 @@ struct ChatScreenViewState: BindableState {
     let showsSenderNames: Bool
     var items: [TimelineItem] = []
     var isPaginating = false
+    /// Set when the last back-pagination request failed; cleared as soon as a new one starts.
+    var paginationFailed = false
     var reachedStart = false
     var replyingTo: EventItem?
+    /// A message that failed to send, kept around so it can be retried without retyping it.
+    var draft: ChatDraft?
     var bindings = ChatScreenBindings()
+}
+
+/// A message that failed to enqueue, remembered so `.retryDraft` can resend the same text.
+struct ChatDraft: Equatable {
+    let text: String
+    let replyingTo: EventItem?
 }
 
 struct ChatScreenBindings {
@@ -31,5 +41,7 @@ enum ChatScreenViewAction {
     case cancelReply
     case react(key: String, item: EventItem)
     case retry(EventItem)
+    case retryDraft
+    case cancelDraft
     case dismissError
 }

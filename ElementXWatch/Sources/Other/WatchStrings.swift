@@ -56,11 +56,13 @@ nonisolated enum WatchStrings {
 
     static let reply = "Reply"
     static let replyingTo = "Replying to"
-    static let sendFailed = "Couldn't send. Tap the message to retry."
+    static let sendFailed = "Couldn't send your message."
+    static let resendFailed = "Couldn't resend. Try again later."
     static let failedTapToRetry = "Not sent · Tap to retry"
     static let sending = "Sending…"
     static let edited = "(edited)"
     static let loadingOlder = "Loading older messages…"
+    static let loadOlderMessages = "Load older messages"
     static let couldNotOpenChat = "Couldn't open this chat."
     static let ok = "OK"
     static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
