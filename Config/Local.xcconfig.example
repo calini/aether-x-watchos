@@ -1,0 +1,2 @@
+// Copy to Config/Local.xcconfig (git-ignored) and set your Apple ID team for device builds.
+DEVELOPMENT_TEAM = YOURTEAMID

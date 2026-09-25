@@ -1,0 +1,9 @@
+sources:
+  include:
+    - ../../ElementXWatch/Sources
+  exclude:
+    - ../../ElementXWatch/Sources/Mocks
+templates:
+  - AutoMockable.stencil
+output:
+  ../../ElementXWatch/Sources/Mocks/Generated/GeneratedMocks.swift

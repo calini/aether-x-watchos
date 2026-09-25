@@ -1,0 +1,3 @@
+// Simulator builds are signed to run locally; device builds need a team in Local.xcconfig.
+CODE_SIGN_IDENTITY[sdk=watchsimulator*] = -
+#include? "Local.xcconfig"
