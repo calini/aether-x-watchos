@@ -80,6 +80,9 @@ struct AppCoordinatorTests {
     }
 
     @Test
+    // The redundant `.active` and the later `.background` are chained on the same serialized lifecycle
+    // task, so waiting for the background's stop to land is a deterministic proof the redundant request
+    // was already evaluated (and skipped) by then — no arbitrary yield loop needed.
     func redundantActivePhaseDoesNotStartSyncTwice() async throws {
         let (coordinator, restorer, _, setup) = makeCoordinator()
         restorer.restoreReturnValue = .success(setup.clientProxy)
@@ -88,8 +91,9 @@ struct AppCoordinatorTests {
         try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
 
         coordinator.handleScenePhase(.active)
-        for _ in 0..<20 { await Task.yield() }
+        coordinator.handleScenePhase(.background)
 
+        try await waitUntil { setup.clientProxy.stopSyncCallsCount == 1 }
         #expect(setup.clientProxy.startSyncCallsCount == 1)
     }
 
@@ -116,6 +120,23 @@ struct AppCoordinatorTests {
     }
 
     @Test
+    // Regression for a bug where clearSession's synchronous showAuthentication() reset isSyncRunning
+    // before the queued stop ran, making it see "already stopped" and skip stopSync entirely.
+    func authErrorWhileSyncingStopsTheOldClient() async throws {
+        let (coordinator, restorer, sessionStore, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        coordinator.handleScenePhase(.active)
+        try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
+
+        setup.actions.send(.authError(isSoftLogout: false))
+
+        try await waitUntil { coordinator.phase == .signedOut }
+        try await waitUntil { setup.clientProxy.stopSyncCallsCount == 1 }
+        #expect(sessionStore.clearCallsCount == 1)
+    }
+
+    @Test
     func signingOutLogsOutAndClears() async throws {
         let (coordinator, restorer, sessionStore, setup) = makeCoordinator()
         restorer.restoreReturnValue = .success(setup.clientProxy)
@@ -126,6 +147,23 @@ struct AppCoordinatorTests {
         #expect(setup.clientProxy.logoutCallsCount == 1)
         #expect(sessionStore.clearCallsCount == 1)
         #expect(coordinator.phase == .signedOut)
+    }
+
+    @Test
+    func signOutWhileSyncingStopsBeforeLoggingOut() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        coordinator.handleScenePhase(.active)
+        try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
+
+        var callOrder: [String] = []
+        setup.clientProxy.stopSyncClosure = { callOrder.append("stop") }
+        setup.clientProxy.logoutClosure = { callOrder.append("logout") }
+
+        await coordinator.signOut()
+
+        #expect(callOrder == ["stop", "logout"])
     }
 
     // MARK: - Helpers

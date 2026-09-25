@@ -62,8 +62,9 @@ import SwiftUI
 
     func signOut() async {
         MXLog.info("Signing out")
-        await scheduleSyncTransition(shouldRun: false).value
-        await clientProxy?.logout()
+        let oldClientProxy = clientProxy
+        await teardownSync(of: oldClientProxy, wasRunning: isSyncRunning).value
+        await oldClientProxy?.logout()
         clearSession()
     }
 
@@ -74,7 +75,6 @@ import SwiftUI
     private func showAuthentication() {
         cancellables.removeAll()
         clientProxy = nil
-        isSyncRunning = false
         userSessionFlow = nil
 
         let flow = AuthenticationFlowCoordinator(qrLoginService: qrLoginService)
@@ -90,7 +90,6 @@ import SwiftUI
         cancellables.removeAll()
         authenticationFlow = nil
         self.clientProxy = clientProxy
-        isSyncRunning = false
 
         clientProxy.actionsPublisher
             .sink { [weak self] action in
@@ -118,7 +117,7 @@ import SwiftUI
     }
 
     private func clearSession() {
-        scheduleSyncTransition(shouldRun: false)
+        teardownSync(of: clientProxy, wasRunning: isSyncRunning)
         sessionStore.clear()
         showAuthentication()
     }
@@ -143,6 +142,27 @@ import SwiftUI
                 self.isSyncRunning = false
                 await clientProxy.stopSync()
             }
+        }
+        lifecycleTask = task
+        return task
+    }
+
+    /// Stops a session's proxy unconditionally once any earlier transition finishes, then marks sync as
+    /// stopped. Unlike `scheduleSyncTransition`, this is never dropped by the generation check — a session
+    /// ending must always stop its old proxy, even if a later request (e.g. a fresh sign-in) is already
+    /// queued behind it. `wasRunning` and the proxy are snapshotted synchronously at call time so a
+    /// caller's own state changes (clearing `clientProxy`, resetting `isSyncRunning`) can't race this.
+    @discardableResult
+    private func teardownSync(of clientProxy: ClientProxyProtocol?, wasRunning: Bool) -> Task<Void, Never> {
+        lifecycleGeneration += 1
+        let previousTask = lifecycleTask
+
+        let task = Task { [weak self] in
+            await previousTask?.value
+            if wasRunning {
+                await clientProxy?.stopSync()
+            }
+            self?.isSyncRunning = false
         }
         lifecycleTask = task
         return task
