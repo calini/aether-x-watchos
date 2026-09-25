@@ -46,7 +46,7 @@ enum ClientProxyAction: Equatable {
 }
 
 // sourcery: AutoMockable
-protocol ClientProxyProtocol: AnyObject {
+protocol ClientProxyProtocol: AnyObject, Sendable {
     var userID: String { get }
     var deviceID: String? { get }
     var homeserver: String { get }

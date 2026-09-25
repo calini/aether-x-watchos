@@ -6,7 +6,8 @@
 //
 
 /// English UI strings for the watch app (no localisation yet).
-enum WatchStrings {
+/// Nonisolated so callers off the main actor (e.g. `QRLoginError`, an `Error` type) can read them too.
+nonisolated enum WatchStrings {
     static let appName = "Element X"
     static let tryAgain = "Try again"
     static let cancel = "Cancel"
@@ -20,4 +21,13 @@ enum WatchStrings {
     static let location = "📍 Location"
     static let gallery = "🖼️ Gallery"
     static let sticker = "Sticker"
+
+    static let qrErrorExpired = "The code expired. Try again."
+    static let qrErrorDeclined = "Sign-in was declined on your phone."
+    static let qrErrorCancelled = "Sign-in was cancelled."
+    static let qrErrorInsecure = "The codes didn't match. Try again."
+    static let qrErrorLinkingNotSupported = "Your phone can't link devices. Update Element X and turn on Link new device."
+    static let qrErrorServerNotSupported = "Your server doesn't support signing in this way."
+    static let qrErrorOtherDeviceNotSignedIn = "Element X on your phone isn't signed in."
+    static let qrErrorUnknown = "Something went wrong. Try again."
 }

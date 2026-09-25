@@ -338,6 +338,51 @@ nonisolated class KeychainStoreMock: KeychainStoreProtocol, @unchecked Sendable 
         removeRestorationTokenClosure?()
     }
 }
+nonisolated class QRLoginServiceMock: QRLoginServiceProtocol, @unchecked Sendable {
+
+    //MARK: - loginWithGeneratedQRCode
+
+    private let loginWithGeneratedQRCodeOnProgressCallsCountLock = NSLock()
+    private nonisolated(unsafe) var loginWithGeneratedQRCodeOnProgressUnderlyingCallsCount = 0
+    var loginWithGeneratedQRCodeOnProgressCallsCount: Int {
+        get { loginWithGeneratedQRCodeOnProgressCallsCountLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingCallsCount } }
+        set { loginWithGeneratedQRCodeOnProgressCallsCountLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingCallsCount = newValue } }
+    }
+    var loginWithGeneratedQRCodeOnProgressCalled: Bool {
+        return loginWithGeneratedQRCodeOnProgressCallsCount > 0
+    }
+    private let loginWithGeneratedQRCodeOnProgressReceivedOnProgressLock = NSLock()
+    private nonisolated(unsafe) var loginWithGeneratedQRCodeOnProgressUnderlyingReceivedOnProgress: (@MainActor (QRLoginProgress) -> Void)?
+    var loginWithGeneratedQRCodeOnProgressReceivedOnProgress: (@MainActor (QRLoginProgress) -> Void)? {
+        get { loginWithGeneratedQRCodeOnProgressReceivedOnProgressLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingReceivedOnProgress } }
+        set { loginWithGeneratedQRCodeOnProgressReceivedOnProgressLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingReceivedOnProgress = newValue } }
+    }
+    private let loginWithGeneratedQRCodeOnProgressReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var loginWithGeneratedQRCodeOnProgressUnderlyingReceivedInvocations: [(@MainActor (QRLoginProgress) -> Void)] = []
+    var loginWithGeneratedQRCodeOnProgressReceivedInvocations: [(@MainActor (QRLoginProgress) -> Void)] {
+        get { loginWithGeneratedQRCodeOnProgressReceivedInvocationsLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingReceivedInvocations } }
+        set { loginWithGeneratedQRCodeOnProgressReceivedInvocationsLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let loginWithGeneratedQRCodeOnProgressReturnValueLock = NSLock()
+    private nonisolated(unsafe) var loginWithGeneratedQRCodeOnProgressUnderlyingReturnValue: Result<ClientProxyProtocol, QRLoginError>!
+    var loginWithGeneratedQRCodeOnProgressReturnValue: Result<ClientProxyProtocol, QRLoginError>! {
+        get { loginWithGeneratedQRCodeOnProgressReturnValueLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingReturnValue } }
+        set { loginWithGeneratedQRCodeOnProgressReturnValueLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var loginWithGeneratedQRCodeOnProgressClosure: ((@MainActor @escaping (QRLoginProgress) -> Void) async -> Result<ClientProxyProtocol, QRLoginError>)?
+
+    @concurrent func loginWithGeneratedQRCode(onProgress: @MainActor @escaping (QRLoginProgress) -> Void) async -> Result<ClientProxyProtocol, QRLoginError> {
+        loginWithGeneratedQRCodeOnProgressCallsCountLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingCallsCount += 1 }
+        loginWithGeneratedQRCodeOnProgressReceivedOnProgress = onProgress
+        loginWithGeneratedQRCodeOnProgressReceivedInvocationsLock.withLock { loginWithGeneratedQRCodeOnProgressUnderlyingReceivedInvocations.append(onProgress) }
+        if let loginWithGeneratedQRCodeOnProgressClosure = loginWithGeneratedQRCodeOnProgressClosure {
+            return await loginWithGeneratedQRCodeOnProgressClosure(onProgress)
+        } else {
+            return loginWithGeneratedQRCodeOnProgressReturnValue
+        }
+    }
+}
 nonisolated class RoomSummaryProviderMock: RoomSummaryProviderProtocol, @unchecked Sendable {
     var roomsPublisher: AnyPublisher<[RoomSummary], Never> {
         get { return underlyingRoomsPublisher }
