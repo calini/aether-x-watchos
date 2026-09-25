@@ -13,3 +13,5 @@ Source commit: `ad1d7a301` (element-x-ios `develop`, 2026-09-25). Licence: AGPL-
 | `ElementXWatch/Sources/Services/Session/SessionDirectories.swift` | `ElementX/Sources/Services/UserSession/SessionDirectories.swift` | Removed transient-data deletion and the legacy init; added `create()` and watch base directories. |
 | `ElementXWatch/Sources/Services/Session/RestorationToken.swift` | `ElementX/Sources/Services/UserSession/RestorationToken.swift` | A cache directory is required (no legacy single-directory tokens). |
 | `ElementXWatch/Sources/Services/Session/SessionDelegate.swift` | `ElementX/Sources/Services/UserSession/UserSessionStore.swift` (client session delegate) | Single-account keychain store. |
+| `ElementXWatch/Sources/Services/Client/ClientFactory.swift` | `ElementX/Sources/Services/Client/ClientFactory.swift` | URLSession transport, memory-constrained, no search index, no automatic back-pagination, DEBUG reqwest tripwire, no app hooks. |
+| `ElementXWatch/Sources/Other/Tracing.swift` | `ElementX/Sources/Other/Logging/Tracing.swift` | Minimal file + system logging, no Sentry. |

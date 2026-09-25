@@ -9,6 +9,101 @@
 
 import Foundation
 
+nonisolated class ClientFactoryMock: ClientFactoryProtocol, @unchecked Sendable {
+
+    //MARK: - makeLoginClient
+
+    nonisolated(unsafe) var makeLoginClientServerNameDirectoriesPassphraseThrowableError: Error?
+    private let makeLoginClientServerNameDirectoriesPassphraseCallsCountLock = NSLock()
+    private nonisolated(unsafe) var makeLoginClientServerNameDirectoriesPassphraseUnderlyingCallsCount = 0
+    var makeLoginClientServerNameDirectoriesPassphraseCallsCount: Int {
+        get { makeLoginClientServerNameDirectoriesPassphraseCallsCountLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingCallsCount } }
+        set { makeLoginClientServerNameDirectoriesPassphraseCallsCountLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingCallsCount = newValue } }
+    }
+    var makeLoginClientServerNameDirectoriesPassphraseCalled: Bool {
+        return makeLoginClientServerNameDirectoriesPassphraseCallsCount > 0
+    }
+    private let makeLoginClientServerNameDirectoriesPassphraseReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var makeLoginClientServerNameDirectoriesPassphraseUnderlyingReceivedArguments: (serverName: String, directories: SessionDirectories, passphrase: Data)?
+    var makeLoginClientServerNameDirectoriesPassphraseReceivedArguments: (serverName: String, directories: SessionDirectories, passphrase: Data)? {
+        get { makeLoginClientServerNameDirectoriesPassphraseReceivedArgumentsLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingReceivedArguments } }
+        set { makeLoginClientServerNameDirectoriesPassphraseReceivedArgumentsLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingReceivedArguments = newValue } }
+    }
+    private let makeLoginClientServerNameDirectoriesPassphraseReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var makeLoginClientServerNameDirectoriesPassphraseUnderlyingReceivedInvocations: [(serverName: String, directories: SessionDirectories, passphrase: Data)] = []
+    var makeLoginClientServerNameDirectoriesPassphraseReceivedInvocations: [(serverName: String, directories: SessionDirectories, passphrase: Data)] {
+        get { makeLoginClientServerNameDirectoriesPassphraseReceivedInvocationsLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingReceivedInvocations } }
+        set { makeLoginClientServerNameDirectoriesPassphraseReceivedInvocationsLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let makeLoginClientServerNameDirectoriesPassphraseReturnValueLock = NSLock()
+    private nonisolated(unsafe) var makeLoginClientServerNameDirectoriesPassphraseUnderlyingReturnValue: Client!
+    var makeLoginClientServerNameDirectoriesPassphraseReturnValue: Client! {
+        get { makeLoginClientServerNameDirectoriesPassphraseReturnValueLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingReturnValue } }
+        set { makeLoginClientServerNameDirectoriesPassphraseReturnValueLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var makeLoginClientServerNameDirectoriesPassphraseClosure: ((String, SessionDirectories, Data) async throws -> Client)?
+
+    @concurrent func makeLoginClient(serverName: String, directories: SessionDirectories, passphrase: Data) async throws -> Client {
+        if let error = makeLoginClientServerNameDirectoriesPassphraseThrowableError {
+            throw error
+        }
+        makeLoginClientServerNameDirectoriesPassphraseCallsCountLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingCallsCount += 1 }
+        makeLoginClientServerNameDirectoriesPassphraseReceivedArguments = (serverName: serverName, directories: directories, passphrase: passphrase)
+        makeLoginClientServerNameDirectoriesPassphraseReceivedInvocationsLock.withLock { makeLoginClientServerNameDirectoriesPassphraseUnderlyingReceivedInvocations.append((serverName: serverName, directories: directories, passphrase: passphrase)) }
+        if let makeLoginClientServerNameDirectoriesPassphraseClosure = makeLoginClientServerNameDirectoriesPassphraseClosure {
+            return try await makeLoginClientServerNameDirectoriesPassphraseClosure(serverName, directories, passphrase)
+        } else {
+            return makeLoginClientServerNameDirectoriesPassphraseReturnValue
+        }
+    }
+    //MARK: - makeRestoredClient
+
+    nonisolated(unsafe) var makeRestoredClientTokenThrowableError: Error?
+    private let makeRestoredClientTokenCallsCountLock = NSLock()
+    private nonisolated(unsafe) var makeRestoredClientTokenUnderlyingCallsCount = 0
+    var makeRestoredClientTokenCallsCount: Int {
+        get { makeRestoredClientTokenCallsCountLock.withLock { makeRestoredClientTokenUnderlyingCallsCount } }
+        set { makeRestoredClientTokenCallsCountLock.withLock { makeRestoredClientTokenUnderlyingCallsCount = newValue } }
+    }
+    var makeRestoredClientTokenCalled: Bool {
+        return makeRestoredClientTokenCallsCount > 0
+    }
+    private let makeRestoredClientTokenReceivedTokenLock = NSLock()
+    private nonisolated(unsafe) var makeRestoredClientTokenUnderlyingReceivedToken: RestorationToken?
+    var makeRestoredClientTokenReceivedToken: RestorationToken? {
+        get { makeRestoredClientTokenReceivedTokenLock.withLock { makeRestoredClientTokenUnderlyingReceivedToken } }
+        set { makeRestoredClientTokenReceivedTokenLock.withLock { makeRestoredClientTokenUnderlyingReceivedToken = newValue } }
+    }
+    private let makeRestoredClientTokenReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var makeRestoredClientTokenUnderlyingReceivedInvocations: [RestorationToken] = []
+    var makeRestoredClientTokenReceivedInvocations: [RestorationToken] {
+        get { makeRestoredClientTokenReceivedInvocationsLock.withLock { makeRestoredClientTokenUnderlyingReceivedInvocations } }
+        set { makeRestoredClientTokenReceivedInvocationsLock.withLock { makeRestoredClientTokenUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let makeRestoredClientTokenReturnValueLock = NSLock()
+    private nonisolated(unsafe) var makeRestoredClientTokenUnderlyingReturnValue: Client!
+    var makeRestoredClientTokenReturnValue: Client! {
+        get { makeRestoredClientTokenReturnValueLock.withLock { makeRestoredClientTokenUnderlyingReturnValue } }
+        set { makeRestoredClientTokenReturnValueLock.withLock { makeRestoredClientTokenUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var makeRestoredClientTokenClosure: ((RestorationToken) async throws -> Client)?
+
+    @concurrent func makeRestoredClient(token: RestorationToken) async throws -> Client {
+        if let error = makeRestoredClientTokenThrowableError {
+            throw error
+        }
+        makeRestoredClientTokenCallsCountLock.withLock { makeRestoredClientTokenUnderlyingCallsCount += 1 }
+        makeRestoredClientTokenReceivedToken = token
+        makeRestoredClientTokenReceivedInvocationsLock.withLock { makeRestoredClientTokenUnderlyingReceivedInvocations.append(token) }
+        if let makeRestoredClientTokenClosure = makeRestoredClientTokenClosure {
+            return try await makeRestoredClientTokenClosure(token)
+        } else {
+            return makeRestoredClientTokenReturnValue
+        }
+    }
+}
 nonisolated class KeychainStoreMock: KeychainStoreProtocol, @unchecked Sendable {
 
     //MARK: - restorationToken

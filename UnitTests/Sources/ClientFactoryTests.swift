@@ -1,0 +1,40 @@
+//
+// Copyright 2026 Element Creations Ltd.
+//
+// SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+// Please see LICENSE files in the repository root for full details.
+//
+
+@testable import ElementXWatch
+import Foundation
+import MatrixRustSDK
+import Testing
+
+@Suite(.serialized)
+struct ClientFactoryTests {
+    @Test
+    func buildsALoginClientEntirelyThroughTheTransport() async throws {
+        StubURLProtocol.install { request, _ in
+            switch request.url?.path() {
+            case "/.well-known/matrix/client":
+                return (.stub(request.url, status: 404), Data())
+            case "/_matrix/client/versions":
+                let body = #"{"versions":["v1.11"],"unstable_features":{"org.matrix.simplified_msc3575":true}}"#
+                return (.stub(request.url, status: 200, headers: ["Content-Type": "application/json"]), Data(body.utf8))
+            default:
+                return (.stub(request.url, status: 404), Data(#"{"errcode":"M_UNRECOGNIZED"}"#.utf8))
+            }
+        }
+        let factory = ClientFactory(transport: URLSessionTransport(configuration: StubURLProtocol.configuration()),
+                                    sessionDelegate: SessionDelegate(keychainStore: KeychainStore(service: "tests.\(UUID().uuidString)")))
+        let directories = SessionDirectories()
+        try directories.create()
+        defer { directories.delete() }
+
+        let client = try await factory.makeLoginClient(serverName: "https://example.org",
+                                                       directories: directories,
+                                                       passphrase: Data(repeating: 7, count: 32))
+
+        #expect(client.homeserver().hasPrefix("https://example.org"))
+    }
+}
