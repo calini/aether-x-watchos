@@ -57,8 +57,9 @@ struct ChatScreen: View {
         }
     }
 
-    /// Loads older messages while the spinner is visible, re-triggering as each new oldest item
-    /// arrives (a page can add only hidden state events, so `.onAppear` alone can stall forever).
+    /// Loads older messages while the spinner is visible, re-triggering after every successful
+    /// non-final page (keyed on a counter, not the oldest item, since a page can add only hidden
+    /// state events with no new visible row — `.onAppear` alone would then stall forever).
     @ViewBuilder
     private var paginationRow: some View {
         if !context.viewState.reachedStart {
@@ -72,7 +73,7 @@ struct ChatScreen: View {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel(WatchStrings.loadingOlder)
-                    .task(id: context.viewState.items.first?.id) {
+                    .task(id: context.viewState.paginationRequestID) {
                         context.send(viewAction: .paginateBackwards)
                     }
             }
@@ -124,7 +125,17 @@ struct ChatScreen_Previews: PreviewProvider {
     }
 
     static var loadingOlder: ChatScreenViewModel {
-        let viewModel = makeViewModel(isDirect: true)
+        let proxy = TimelineProxyMock()
+        proxy.itemsPublisher = Just(items).eraseToAnyPublisher()
+        // Never resolves, so the preview settles on the spinner instead of looping forever: the
+        // view model bumps `paginationRequestID` (and so re-triggers `.task(id:)`) on every
+        // non-final success, which a fixed `.success(false)` would do indefinitely here.
+        proxy.paginateBackwardsClosure = {
+            try? await Task.sleep(for: .seconds(999))
+            return .success(false)
+        }
+        let viewModel = ChatScreenViewModel(roomName: "Bob", isDirect: true, timelineProxy: proxy)
+        viewModel.state.items = items
         viewModel.state.reachedStart = false
         return viewModel
     }
@@ -176,7 +187,7 @@ struct ChatScreen_Previews: PreviewProvider {
     static func makeViewModel(isDirect: Bool) -> ChatScreenViewModel {
         let proxy = TimelineProxyMock()
         proxy.itemsPublisher = Just(items).eraseToAnyPublisher()
-        // The "Loading older" preview's spinner drives a real `.paginateBackwards` via `.task`.
+        // Safe default in case a preview's spinner drives a real `.paginateBackwards` via `.task`.
         proxy.paginateBackwardsReturnValue = .success(false)
         let viewModel = ChatScreenViewModel(roomName: isDirect ? "Bob" : "Climbing crew", isDirect: isDirect, timelineProxy: proxy)
         viewModel.state.items = items

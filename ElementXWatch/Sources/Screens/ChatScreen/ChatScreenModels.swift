@@ -13,6 +13,9 @@ struct ChatScreenViewState: BindableState {
     var isPaginating = false
     /// Set when the last back-pagination request failed; cleared as soon as a new one starts.
     var paginationFailed = false
+    /// Bumped after every successful pagination that didn't reach the start, so the spinner's
+    /// `.task(id:)` re-runs even when a page added no new visible item (e.g. all hidden state events).
+    var paginationRequestID = 0
     var reachedStart = false
     var replyingTo: EventItem?
     /// A message that failed to send, kept around so it can be retried without retyping it.

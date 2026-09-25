@@ -137,6 +137,24 @@ struct ChatScreenViewModelTests {
         try await waitUntil { proxy.paginateBackwardsCallsCount == 2 }
     }
 
+    @Test
+    func paginationRequestIDIncrementsOnEachNonFinalPageOnly() async throws {
+        let (viewModel, proxy, _) = makeViewModel()
+        proxy.paginateBackwardsReturnValue = .success(false)
+
+        viewModel.context.send(viewAction: .paginateBackwards)
+        try await waitUntil { viewModel.context.viewState.paginationRequestID == 1 }
+
+        viewModel.context.send(viewAction: .paginateBackwards)
+        try await waitUntil { viewModel.context.viewState.paginationRequestID == 2 }
+
+        proxy.paginateBackwardsReturnValue = .success(true)
+        viewModel.context.send(viewAction: .paginateBackwards)
+        try await waitUntil { viewModel.context.viewState.reachedStart }
+
+        #expect(viewModel.context.viewState.paginationRequestID == 2)
+    }
+
     // MARK: - Helpers
 
     private func makeViewModel() -> (ChatScreenViewModel, TimelineProxyMock, PassthroughSubject<[ElementXWatch.TimelineItem], Never>) {

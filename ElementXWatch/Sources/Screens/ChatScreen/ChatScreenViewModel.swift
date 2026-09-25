@@ -84,6 +84,11 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             switch result {
             case .success(let reachedStart):
                 state.reachedStart = reachedStart
+                // Bumping this (rather than keying off the oldest item) re-triggers the spinner's
+                // task even when the page added no visible item, e.g. only hidden state events.
+                if !reachedStart {
+                    state.paginationRequestID += 1
+                }
             case .failure:
                 state.paginationFailed = true
             }
