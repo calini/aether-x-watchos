@@ -10,6 +10,7 @@ import Foundation
 import Synchronization
 
 /// Intercepts URLSession traffic in tests. Install a handler before each test.
+/// watchOS simulators don't route PUT/POST through registered `URLProtocol`s, so stubbed tests use GET.
 nonisolated final class StubURLProtocol: URLProtocol {
     typealias Handler = @Sendable (URLRequest, Data?) throws -> (HTTPURLResponse, Data)
 
