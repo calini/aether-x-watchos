@@ -41,4 +41,15 @@ nonisolated enum WatchStrings {
     static let approveOnPhone = "Approve on your iPhone"
     static let approvalCode = "Code"
     static let syncingKeys = "Securing your messages…"
+
+    static let chats = "Chats"
+    static let settings = "Settings"
+    static let noChats = "No chats yet"
+    static let offline = "Offline"
+    static let connecting = "Connecting…"
+    static let signOut = "Sign out"
+    static let signOutConfirmation = "Sign out of Element X on this watch?"
+    static let verified = "Verified session"
+    static let unverified = "Unverified session"
+    static let verificationUnknown = "Checking verification…"
 }
