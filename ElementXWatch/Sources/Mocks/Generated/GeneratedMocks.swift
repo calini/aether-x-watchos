@@ -730,4 +730,35 @@ nonisolated class TimelineProxyMock: TimelineProxyProtocol, @unchecked Sendable 
         await markAsReadClosure?()
     }
 }
+nonisolated class UserSessionRestorerMock: UserSessionRestorerProtocol, @unchecked Sendable {
+
+    //MARK: - restore
+
+    private let restoreCallsCountLock = NSLock()
+    private nonisolated(unsafe) var restoreUnderlyingCallsCount = 0
+    var restoreCallsCount: Int {
+        get { restoreCallsCountLock.withLock { restoreUnderlyingCallsCount } }
+        set { restoreCallsCountLock.withLock { restoreUnderlyingCallsCount = newValue } }
+    }
+    var restoreCalled: Bool {
+        return restoreCallsCount > 0
+    }
+
+    private let restoreReturnValueLock = NSLock()
+    private nonisolated(unsafe) var restoreUnderlyingReturnValue: Result<ClientProxyProtocol, UserSessionRestorerError>!
+    var restoreReturnValue: Result<ClientProxyProtocol, UserSessionRestorerError>! {
+        get { restoreReturnValueLock.withLock { restoreUnderlyingReturnValue } }
+        set { restoreReturnValueLock.withLock { restoreUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var restoreClosure: (() async -> Result<ClientProxyProtocol, UserSessionRestorerError>)?
+
+    @concurrent func restore() async -> Result<ClientProxyProtocol, UserSessionRestorerError> {
+        restoreCallsCountLock.withLock { restoreUnderlyingCallsCount += 1 }
+        if let restoreClosure = restoreClosure {
+            return await restoreClosure()
+        } else {
+            return restoreReturnValue
+        }
+    }
+}
 // swiftlint:enable all
