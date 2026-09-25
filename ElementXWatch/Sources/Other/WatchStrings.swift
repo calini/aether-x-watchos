@@ -21,6 +21,7 @@ nonisolated enum WatchStrings {
     static let location = "📍 Location"
     static let gallery = "🖼️ Gallery"
     static let sticker = "Sticker"
+    static let unsupportedMessage = "Unsupported message"
 
     static let qrErrorExpired = "The code expired. Try again."
     static let qrErrorDeclined = "Sign-in was declined on your phone."
