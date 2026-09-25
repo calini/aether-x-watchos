@@ -18,6 +18,7 @@ extension ClientProxyMock {
         mock.actionsPublisher = Empty().eraseToAnyPublisher()
         mock.userID = "@alice:matrix.org"
         mock.loadDisplayNameReturnValue = "Alice"
+        mock.timelineProxyForReturnValue = nil
         return mock
     }
 }

@@ -241,6 +241,48 @@ nonisolated class ClientProxyMock: ClientProxyProtocol, @unchecked Sendable {
             return loadThumbnailForWidthHeightReturnValue
         }
     }
+    //MARK: - timelineProxy
+
+    private let timelineProxyForCallsCountLock = NSLock()
+    private nonisolated(unsafe) var timelineProxyForUnderlyingCallsCount = 0
+    var timelineProxyForCallsCount: Int {
+        get { timelineProxyForCallsCountLock.withLock { timelineProxyForUnderlyingCallsCount } }
+        set { timelineProxyForCallsCountLock.withLock { timelineProxyForUnderlyingCallsCount = newValue } }
+    }
+    var timelineProxyForCalled: Bool {
+        return timelineProxyForCallsCount > 0
+    }
+    private let timelineProxyForReceivedRoomIDLock = NSLock()
+    private nonisolated(unsafe) var timelineProxyForUnderlyingReceivedRoomID: String?
+    var timelineProxyForReceivedRoomID: String? {
+        get { timelineProxyForReceivedRoomIDLock.withLock { timelineProxyForUnderlyingReceivedRoomID } }
+        set { timelineProxyForReceivedRoomIDLock.withLock { timelineProxyForUnderlyingReceivedRoomID = newValue } }
+    }
+    private let timelineProxyForReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var timelineProxyForUnderlyingReceivedInvocations: [String] = []
+    var timelineProxyForReceivedInvocations: [String] {
+        get { timelineProxyForReceivedInvocationsLock.withLock { timelineProxyForUnderlyingReceivedInvocations } }
+        set { timelineProxyForReceivedInvocationsLock.withLock { timelineProxyForUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let timelineProxyForReturnValueLock = NSLock()
+    private nonisolated(unsafe) var timelineProxyForUnderlyingReturnValue: TimelineProxyProtocol?
+    var timelineProxyForReturnValue: TimelineProxyProtocol? {
+        get { timelineProxyForReturnValueLock.withLock { timelineProxyForUnderlyingReturnValue } }
+        set { timelineProxyForReturnValueLock.withLock { timelineProxyForUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var timelineProxyForClosure: ((String) async -> TimelineProxyProtocol?)?
+
+    @concurrent func timelineProxy(for roomID: String) async -> TimelineProxyProtocol? {
+        timelineProxyForCallsCountLock.withLock { timelineProxyForUnderlyingCallsCount += 1 }
+        timelineProxyForReceivedRoomID = roomID
+        timelineProxyForReceivedInvocationsLock.withLock { timelineProxyForUnderlyingReceivedInvocations.append(roomID) }
+        if let timelineProxyForClosure = timelineProxyForClosure {
+            return await timelineProxyForClosure(roomID)
+        } else {
+            return timelineProxyForReturnValue
+        }
+    }
     //MARK: - logout
 
     private let logoutCallsCountLock = NSLock()
@@ -490,6 +532,202 @@ nonisolated class SessionStoreMock: SessionStoreProtocol, @unchecked Sendable {
     func clear() {
         clearCallsCountLock.withLock { clearUnderlyingCallsCount += 1 }
         clearClosure?()
+    }
+}
+nonisolated class TimelineProxyMock: TimelineProxyProtocol, @unchecked Sendable {
+    var itemsPublisher: AnyPublisher<[TimelineItem], Never> {
+        get { return underlyingItemsPublisher }
+        set(value) { underlyingItemsPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingItemsPublisher: AnyPublisher<[TimelineItem], Never>!
+
+    //MARK: - subscribe
+
+    private let subscribeCallsCountLock = NSLock()
+    private nonisolated(unsafe) var subscribeUnderlyingCallsCount = 0
+    var subscribeCallsCount: Int {
+        get { subscribeCallsCountLock.withLock { subscribeUnderlyingCallsCount } }
+        set { subscribeCallsCountLock.withLock { subscribeUnderlyingCallsCount = newValue } }
+    }
+    var subscribeCalled: Bool {
+        return subscribeCallsCount > 0
+    }
+    nonisolated(unsafe) var subscribeClosure: (() async -> Void)?
+
+    @concurrent func subscribe() async {
+        subscribeCallsCountLock.withLock { subscribeUnderlyingCallsCount += 1 }
+        await subscribeClosure?()
+    }
+    //MARK: - paginateBackwards
+
+    private let paginateBackwardsCallsCountLock = NSLock()
+    private nonisolated(unsafe) var paginateBackwardsUnderlyingCallsCount = 0
+    var paginateBackwardsCallsCount: Int {
+        get { paginateBackwardsCallsCountLock.withLock { paginateBackwardsUnderlyingCallsCount } }
+        set { paginateBackwardsCallsCountLock.withLock { paginateBackwardsUnderlyingCallsCount = newValue } }
+    }
+    var paginateBackwardsCalled: Bool {
+        return paginateBackwardsCallsCount > 0
+    }
+
+    private let paginateBackwardsReturnValueLock = NSLock()
+    private nonisolated(unsafe) var paginateBackwardsUnderlyingReturnValue: Result<Bool, TimelineProxyError>!
+    var paginateBackwardsReturnValue: Result<Bool, TimelineProxyError>! {
+        get { paginateBackwardsReturnValueLock.withLock { paginateBackwardsUnderlyingReturnValue } }
+        set { paginateBackwardsReturnValueLock.withLock { paginateBackwardsUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var paginateBackwardsClosure: (() async -> Result<Bool, TimelineProxyError>)?
+
+    @concurrent func paginateBackwards() async -> Result<Bool, TimelineProxyError> {
+        paginateBackwardsCallsCountLock.withLock { paginateBackwardsUnderlyingCallsCount += 1 }
+        if let paginateBackwardsClosure = paginateBackwardsClosure {
+            return await paginateBackwardsClosure()
+        } else {
+            return paginateBackwardsReturnValue
+        }
+    }
+    //MARK: - send
+
+    private let sendMessageInReplyToCallsCountLock = NSLock()
+    private nonisolated(unsafe) var sendMessageInReplyToUnderlyingCallsCount = 0
+    var sendMessageInReplyToCallsCount: Int {
+        get { sendMessageInReplyToCallsCountLock.withLock { sendMessageInReplyToUnderlyingCallsCount } }
+        set { sendMessageInReplyToCallsCountLock.withLock { sendMessageInReplyToUnderlyingCallsCount = newValue } }
+    }
+    var sendMessageInReplyToCalled: Bool {
+        return sendMessageInReplyToCallsCount > 0
+    }
+    private let sendMessageInReplyToReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var sendMessageInReplyToUnderlyingReceivedArguments: (message: String, eventID: String?)?
+    var sendMessageInReplyToReceivedArguments: (message: String, eventID: String?)? {
+        get { sendMessageInReplyToReceivedArgumentsLock.withLock { sendMessageInReplyToUnderlyingReceivedArguments } }
+        set { sendMessageInReplyToReceivedArgumentsLock.withLock { sendMessageInReplyToUnderlyingReceivedArguments = newValue } }
+    }
+    private let sendMessageInReplyToReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var sendMessageInReplyToUnderlyingReceivedInvocations: [(message: String, eventID: String?)] = []
+    var sendMessageInReplyToReceivedInvocations: [(message: String, eventID: String?)] {
+        get { sendMessageInReplyToReceivedInvocationsLock.withLock { sendMessageInReplyToUnderlyingReceivedInvocations } }
+        set { sendMessageInReplyToReceivedInvocationsLock.withLock { sendMessageInReplyToUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let sendMessageInReplyToReturnValueLock = NSLock()
+    private nonisolated(unsafe) var sendMessageInReplyToUnderlyingReturnValue: Result<Void, TimelineProxyError>!
+    var sendMessageInReplyToReturnValue: Result<Void, TimelineProxyError>! {
+        get { sendMessageInReplyToReturnValueLock.withLock { sendMessageInReplyToUnderlyingReturnValue } }
+        set { sendMessageInReplyToReturnValueLock.withLock { sendMessageInReplyToUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var sendMessageInReplyToClosure: ((String, String?) async -> Result<Void, TimelineProxyError>)?
+
+    @concurrent func send(message: String, inReplyTo eventID: String?) async -> Result<Void, TimelineProxyError> {
+        sendMessageInReplyToCallsCountLock.withLock { sendMessageInReplyToUnderlyingCallsCount += 1 }
+        sendMessageInReplyToReceivedArguments = (message: message, eventID: eventID)
+        sendMessageInReplyToReceivedInvocationsLock.withLock { sendMessageInReplyToUnderlyingReceivedInvocations.append((message: message, eventID: eventID)) }
+        if let sendMessageInReplyToClosure = sendMessageInReplyToClosure {
+            return await sendMessageInReplyToClosure(message, eventID)
+        } else {
+            return sendMessageInReplyToReturnValue
+        }
+    }
+    //MARK: - toggleReaction
+
+    private let toggleReactionToCallsCountLock = NSLock()
+    private nonisolated(unsafe) var toggleReactionToUnderlyingCallsCount = 0
+    var toggleReactionToCallsCount: Int {
+        get { toggleReactionToCallsCountLock.withLock { toggleReactionToUnderlyingCallsCount } }
+        set { toggleReactionToCallsCountLock.withLock { toggleReactionToUnderlyingCallsCount = newValue } }
+    }
+    var toggleReactionToCalled: Bool {
+        return toggleReactionToCallsCount > 0
+    }
+    private let toggleReactionToReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var toggleReactionToUnderlyingReceivedArguments: (key: String, itemID: EventOrTransactionId)?
+    var toggleReactionToReceivedArguments: (key: String, itemID: EventOrTransactionId)? {
+        get { toggleReactionToReceivedArgumentsLock.withLock { toggleReactionToUnderlyingReceivedArguments } }
+        set { toggleReactionToReceivedArgumentsLock.withLock { toggleReactionToUnderlyingReceivedArguments = newValue } }
+    }
+    private let toggleReactionToReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var toggleReactionToUnderlyingReceivedInvocations: [(key: String, itemID: EventOrTransactionId)] = []
+    var toggleReactionToReceivedInvocations: [(key: String, itemID: EventOrTransactionId)] {
+        get { toggleReactionToReceivedInvocationsLock.withLock { toggleReactionToUnderlyingReceivedInvocations } }
+        set { toggleReactionToReceivedInvocationsLock.withLock { toggleReactionToUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let toggleReactionToReturnValueLock = NSLock()
+    private nonisolated(unsafe) var toggleReactionToUnderlyingReturnValue: Result<Void, TimelineProxyError>!
+    var toggleReactionToReturnValue: Result<Void, TimelineProxyError>! {
+        get { toggleReactionToReturnValueLock.withLock { toggleReactionToUnderlyingReturnValue } }
+        set { toggleReactionToReturnValueLock.withLock { toggleReactionToUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var toggleReactionToClosure: ((String, EventOrTransactionId) async -> Result<Void, TimelineProxyError>)?
+
+    @concurrent func toggleReaction(_ key: String, to itemID: EventOrTransactionId) async -> Result<Void, TimelineProxyError> {
+        toggleReactionToCallsCountLock.withLock { toggleReactionToUnderlyingCallsCount += 1 }
+        toggleReactionToReceivedArguments = (key: key, itemID: itemID)
+        toggleReactionToReceivedInvocationsLock.withLock { toggleReactionToUnderlyingReceivedInvocations.append((key: key, itemID: itemID)) }
+        if let toggleReactionToClosure = toggleReactionToClosure {
+            return await toggleReactionToClosure(key, itemID)
+        } else {
+            return toggleReactionToReturnValue
+        }
+    }
+    //MARK: - retrySend
+
+    private let retrySendCallsCountLock = NSLock()
+    private nonisolated(unsafe) var retrySendUnderlyingCallsCount = 0
+    var retrySendCallsCount: Int {
+        get { retrySendCallsCountLock.withLock { retrySendUnderlyingCallsCount } }
+        set { retrySendCallsCountLock.withLock { retrySendUnderlyingCallsCount = newValue } }
+    }
+    var retrySendCalled: Bool {
+        return retrySendCallsCount > 0
+    }
+    private let retrySendReceivedItemIDLock = NSLock()
+    private nonisolated(unsafe) var retrySendUnderlyingReceivedItemID: EventOrTransactionId?
+    var retrySendReceivedItemID: EventOrTransactionId? {
+        get { retrySendReceivedItemIDLock.withLock { retrySendUnderlyingReceivedItemID } }
+        set { retrySendReceivedItemIDLock.withLock { retrySendUnderlyingReceivedItemID = newValue } }
+    }
+    private let retrySendReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var retrySendUnderlyingReceivedInvocations: [EventOrTransactionId] = []
+    var retrySendReceivedInvocations: [EventOrTransactionId] {
+        get { retrySendReceivedInvocationsLock.withLock { retrySendUnderlyingReceivedInvocations } }
+        set { retrySendReceivedInvocationsLock.withLock { retrySendUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let retrySendReturnValueLock = NSLock()
+    private nonisolated(unsafe) var retrySendUnderlyingReturnValue: Result<Void, TimelineProxyError>!
+    var retrySendReturnValue: Result<Void, TimelineProxyError>! {
+        get { retrySendReturnValueLock.withLock { retrySendUnderlyingReturnValue } }
+        set { retrySendReturnValueLock.withLock { retrySendUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var retrySendClosure: ((EventOrTransactionId) async -> Result<Void, TimelineProxyError>)?
+
+    @concurrent func retrySend(_ itemID: EventOrTransactionId) async -> Result<Void, TimelineProxyError> {
+        retrySendCallsCountLock.withLock { retrySendUnderlyingCallsCount += 1 }
+        retrySendReceivedItemID = itemID
+        retrySendReceivedInvocationsLock.withLock { retrySendUnderlyingReceivedInvocations.append(itemID) }
+        if let retrySendClosure = retrySendClosure {
+            return await retrySendClosure(itemID)
+        } else {
+            return retrySendReturnValue
+        }
+    }
+    //MARK: - markAsRead
+
+    private let markAsReadCallsCountLock = NSLock()
+    private nonisolated(unsafe) var markAsReadUnderlyingCallsCount = 0
+    var markAsReadCallsCount: Int {
+        get { markAsReadCallsCountLock.withLock { markAsReadUnderlyingCallsCount } }
+        set { markAsReadCallsCountLock.withLock { markAsReadUnderlyingCallsCount = newValue } }
+    }
+    var markAsReadCalled: Bool {
+        return markAsReadCallsCount > 0
+    }
+    nonisolated(unsafe) var markAsReadClosure: (() async -> Void)?
+
+    @concurrent func markAsRead() async {
+        markAsReadCallsCountLock.withLock { markAsReadUnderlyingCallsCount += 1 }
+        await markAsReadClosure?()
     }
 }
 // swiftlint:enable all

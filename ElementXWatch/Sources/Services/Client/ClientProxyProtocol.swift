@@ -59,5 +59,6 @@ protocol ClientProxyProtocol: AnyObject, Sendable {
     func stopSync() async
     func loadDisplayName() async -> String?
     func loadThumbnail(for source: MediaSourceProxy, width: Int, height: Int) async -> Data?
+    func timelineProxy(for roomID: String) async -> TimelineProxyProtocol?
     func logout() async
 }

@@ -90,6 +90,20 @@ final class ClientProxy: ClientProxyProtocol {
         }
     }
 
+    func timelineProxy(for roomID: String) async -> TimelineProxyProtocol? {
+        do {
+            let roomListService = syncService.roomListService()
+            // Subscribing gives the room full sliding-sync state while it's open.
+            try await roomListService.setRoomSubscriptions(roomIds: [roomID])
+            let room = try roomListService.room(roomId: roomID)
+            let timeline = try await room.timeline()
+            return TimelineProxy(timeline: timeline, ownUserID: userID)
+        } catch {
+            MXLog.error("Failed opening the timeline for \(roomID): \(error)")
+            return nil
+        }
+    }
+
     func logout() async {
         await syncService.stop()
         do {
