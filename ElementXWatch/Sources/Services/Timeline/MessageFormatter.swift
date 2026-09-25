@@ -6,14 +6,21 @@
 //
 
 import Foundation
+import MatrixRustSDK
 
 /// Renders message bodies: inline Markdown (bold, italic, code, links) plus auto-linked URLs.
 enum MessageFormatter {
     private static let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
-    static func attributedString(from body: String) -> AttributedString {
-        var result = (try? AttributedString(markdown: body, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            ?? AttributedString(body)
+    /// `formatted` is non-nil only when the sender actually used formatting; parsing plain text as
+    /// Markdown would otherwise mangle stray characters (e.g. `2*3*4` loses its asterisks).
+    static func attributedString(from body: String, formatted: FormattedBody?) -> AttributedString {
+        var result = if formatted != nil {
+            (try? AttributedString(markdown: body, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+                ?? AttributedString(body)
+        } else {
+            AttributedString(body)
+        }
         addLinks(to: &result)
         return result
     }

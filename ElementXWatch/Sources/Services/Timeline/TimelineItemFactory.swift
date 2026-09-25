@@ -38,11 +38,11 @@ enum TimelineItemFactory {
         case .message(let message):
             switch message.msgType {
             case .text(let text):
-                return .text(MessageFormatter.attributedString(from: text.body))
+                return .text(MessageFormatter.attributedString(from: text.body, formatted: text.formatted))
             case .emote(let emote):
-                return .emote(MessageFormatter.attributedString(from: emote.body))
+                return .emote(MessageFormatter.attributedString(from: emote.body, formatted: emote.formatted))
             case .notice(let notice):
-                return .notice(MessageFormatter.attributedString(from: notice.body))
+                return .notice(MessageFormatter.attributedString(from: notice.body, formatted: notice.formatted))
             case .image(let image):
                 return .image(ImageBody(caption: image.caption,
                                          source: MediaSourceProxy(source: image.source),
