@@ -10,8 +10,10 @@ import Foundation
 // sourcery: AutoMockable
 protocol SessionStoreProtocol {
     /// Whether a restorable session exists (token present and the crypto store still on disk).
+    /// Checking this clears the session as a side effect if its crypto store is missing.
     var hasSession: Bool { get }
     /// The validated token, or `nil` (invalid sessions are cleared).
+    /// A session whose crypto store is missing is cleared as a side effect of this call.
     func restorationToken() -> RestorationToken?
     func save(_ token: RestorationToken)
     /// Removes the token and deletes the session's files.
@@ -21,12 +23,12 @@ protocol SessionStoreProtocol {
 final class SessionStore: SessionStoreProtocol {
     private let keychainStore: KeychainStoreProtocol
 
-    init(keychainStore: KeychainStoreProtocol) {
-        self.keychainStore = keychainStore
-    }
-
     var hasSession: Bool {
         restorationToken() != nil
+    }
+
+    init(keychainStore: KeychainStoreProtocol) {
+        self.keychainStore = keychainStore
     }
 
     func restorationToken() -> RestorationToken? {

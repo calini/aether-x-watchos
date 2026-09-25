@@ -21,6 +21,12 @@ nonisolated final class KeychainStore: KeychainStoreProtocol {
 
     private let service: String
 
+    private var baseQuery: [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: Self.account]
+    }
+
     init(service: String = "io.ilie.elementx.watch.sessions") {
         self.service = service
     }
@@ -66,11 +72,5 @@ nonisolated final class KeychainStore: KeychainStoreProtocol {
         if status != errSecSuccess, status != errSecItemNotFound {
             MXLog.error("Keychain delete failed: \(status)")
         }
-    }
-
-    private var baseQuery: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: Self.account]
     }
 }
