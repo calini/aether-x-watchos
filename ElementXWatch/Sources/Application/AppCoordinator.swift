@@ -25,6 +25,9 @@ import SwiftUI
     @ObservationIgnored private var clientProxy: ClientProxyProtocol?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var isActive = false
+    @ObservationIgnored private var isSyncRunning = false
+    @ObservationIgnored private var lifecycleTask: Task<Void, Never>?
+    @ObservationIgnored private var lifecycleGeneration = 0
     private var authenticationFlow: AuthenticationFlowCoordinator?
     private var userSessionFlow: UserSessionFlowCoordinator?
 
@@ -51,20 +54,15 @@ import SwiftUI
         }
     }
 
+    /// Any phase other than `.active` (e.g. `.inactive`, which watchOS delivers first when the wrist lowers) stops sync.
     func handleScenePhase(_ scenePhase: ScenePhase) {
         isActive = scenePhase == .active
-        guard let clientProxy else { return }
-        Task {
-            if scenePhase == .active {
-                await clientProxy.startSync()
-            } else if scenePhase == .background {
-                await clientProxy.stopSync()
-            }
-        }
+        scheduleSyncTransition(shouldRun: isActive)
     }
 
     func signOut() async {
         MXLog.info("Signing out")
+        await scheduleSyncTransition(shouldRun: false).value
         await clientProxy?.logout()
         clearSession()
     }
@@ -76,6 +74,7 @@ import SwiftUI
     private func showAuthentication() {
         cancellables.removeAll()
         clientProxy = nil
+        isSyncRunning = false
         userSessionFlow = nil
 
         let flow = AuthenticationFlowCoordinator(qrLoginService: qrLoginService)
@@ -91,6 +90,7 @@ import SwiftUI
         cancellables.removeAll()
         authenticationFlow = nil
         self.clientProxy = clientProxy
+        isSyncRunning = false
 
         clientProxy.actionsPublisher
             .sink { [weak self] action in
@@ -114,14 +114,38 @@ import SwiftUI
         userSessionFlow = flow
         phase = .signedIn
 
-        if isActive {
-            Task { await clientProxy.startSync() }
-        }
+        scheduleSyncTransition(shouldRun: isActive)
     }
 
     private func clearSession() {
+        scheduleSyncTransition(shouldRun: false)
         sessionStore.clear()
         showAuthentication()
+    }
+
+    /// Chains onto any in-flight start/stop so a fast run of phase changes applies in order: a request
+    /// dropped once a later one supersedes it, and a start/stop skipped once it would be a no-op.
+    @discardableResult
+    private func scheduleSyncTransition(shouldRun: Bool) -> Task<Void, Never> {
+        lifecycleGeneration += 1
+        let generation = lifecycleGeneration
+        let previousTask = lifecycleTask
+        let clientProxy = clientProxy
+
+        let task = Task { [weak self] in
+            await previousTask?.value
+            guard let self, generation == self.lifecycleGeneration, let clientProxy else { return }
+
+            if shouldRun, !self.isSyncRunning {
+                self.isSyncRunning = true
+                await clientProxy.startSync()
+            } else if !shouldRun, self.isSyncRunning {
+                self.isSyncRunning = false
+                await clientProxy.stopSync()
+            }
+        }
+        lifecycleTask = task
+        return task
     }
 }
 

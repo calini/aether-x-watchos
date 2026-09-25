@@ -34,14 +34,63 @@ struct AppCoordinatorTests {
     }
 
     @Test
+    // Goes active first (so sync is actually running): with the redundant-call skip in place, backgrounding
+    // straight from launch would be a no-op stop rather than exercising the transition this test is about.
     func goingToTheBackgroundStopsSync() async throws {
         let (coordinator, restorer, _, setup) = makeCoordinator()
         restorer.restoreReturnValue = .success(setup.clientProxy)
         await coordinator.start()
+        coordinator.handleScenePhase(.active)
+        try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
 
         coordinator.handleScenePhase(.background)
 
         try await waitUntil { setup.clientProxy.stopSyncCallsCount == 1 }
+    }
+
+    @Test
+    func inactiveAlsoStopsSync() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        coordinator.handleScenePhase(.active)
+        try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
+
+        coordinator.handleScenePhase(.inactive)
+
+        try await waitUntil { setup.clientProxy.stopSyncCallsCount == 1 }
+    }
+
+    @Test
+    func rapidPhaseFlappingAppliesInOrderAndEndsStarted() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+
+        var callOrder: [String] = []
+        setup.clientProxy.startSyncClosure = { callOrder.append("start") }
+        setup.clientProxy.stopSyncClosure = { callOrder.append("stop") }
+
+        coordinator.handleScenePhase(.active)
+        coordinator.handleScenePhase(.background)
+        coordinator.handleScenePhase(.active)
+
+        try await waitUntil { callOrder.last == "start" }
+        #expect(callOrder.last == "start")
+    }
+
+    @Test
+    func redundantActivePhaseDoesNotStartSyncTwice() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        coordinator.handleScenePhase(.active)
+        try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
+
+        coordinator.handleScenePhase(.active)
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(setup.clientProxy.startSyncCallsCount == 1)
     }
 
     @Test
