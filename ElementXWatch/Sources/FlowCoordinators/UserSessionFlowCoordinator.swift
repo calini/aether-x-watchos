@@ -57,7 +57,8 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         let clientProxy = clientProxy
         return AnyView(UserSessionFlowView(navigation: navigation,
                                             root: chatsCoordinator.toPresentable(),
-                                            destination: { [weak self] route in self?.destination(for: route) ?? AnyView(EmptyView()) })
+                                            destination: { [weak self] route in self?.destination(for: route) ?? AnyView(EmptyView()) },
+                                            onPathChange: { [weak self] in self?.pruneChildCoordinators() })
             .environment(\.mediaLoader, MediaLoader { source, width, height in
                 await clientProxy.loadThumbnail(for: source, width: width, height: height)
             }))
@@ -70,9 +71,8 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
 
         let coordinator: CoordinatorProtocol
         switch route {
-        case .chat(_, let name, _):
-            // Replaced by the chat screen in Task 17.
-            coordinator = PlaceholderCoordinator(title: name)
+        case .chat(let roomID, let name, let isDirect):
+            coordinator = ChatLoaderCoordinator(roomID: roomID, name: name, isDirect: isDirect, clientProxy: clientProxy)
         case .settings:
             let settings = SettingsScreenCoordinator(clientProxy: clientProxy)
             settings.actionsPublisher
@@ -89,28 +89,75 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         childCoordinators[route] = coordinator
         return coordinator.toPresentable()
     }
+
+    /// Drops coordinators for routes no longer on the stack (e.g. after a back swipe), so a
+    /// re-opened chat gets a fresh `ChatLoaderCoordinator` rather than a stale, unsubscribed one.
+    private func pruneChildCoordinators() {
+        let liveRoutes = Set(navigation.path)
+        childCoordinators = childCoordinators.filter { liveRoutes.contains($0.key) }
+    }
 }
 
 private struct UserSessionFlowView: View {
     @Bindable var navigation: UserSessionFlowCoordinator.Navigation
     let root: AnyView
     let destination: (UserSessionRoute) -> AnyView
+    let onPathChange: () -> Void
 
     var body: some View {
         NavigationStack(path: $navigation.path) {
             root.navigationDestination(for: UserSessionRoute.self) { route in destination(route) }
         }
+        .onChange(of: navigation.path) { _, _ in onPathChange() }
     }
 }
 
-private final class PlaceholderCoordinator: CoordinatorProtocol {
-    private let title: String
+/// Opens the room's timeline, then shows the chat screen (or an error if the room can't be opened).
+private final class ChatLoaderCoordinator: CoordinatorProtocol {
+    @Observable final class Model {
+        var chat: ChatScreenCoordinator?
+        var failed = false
+    }
 
-    init(title: String) {
-        self.title = title
+    private let roomID: String
+    private let name: String
+    private let isDirect: Bool
+    private let clientProxy: ClientProxyProtocol
+    private let model = Model()
+
+    init(roomID: String, name: String, isDirect: Bool, clientProxy: ClientProxyProtocol) {
+        self.roomID = roomID
+        self.name = name
+        self.isDirect = isDirect
+        self.clientProxy = clientProxy
+    }
+
+    func start() {
+        Task { [model, roomID, name, isDirect, clientProxy] in
+            if let timelineProxy = await clientProxy.timelineProxy(for: roomID) {
+                model.chat = ChatScreenCoordinator(roomName: name, isDirect: isDirect, timelineProxy: timelineProxy)
+            } else {
+                model.failed = true
+            }
+        }
     }
 
     func toPresentable() -> AnyView {
-        AnyView(Text(title))
+        AnyView(ChatLoaderView(model: model, name: name))
+    }
+}
+
+private struct ChatLoaderView: View {
+    let model: ChatLoaderCoordinator.Model
+    let name: String
+
+    var body: some View {
+        if let chat = model.chat {
+            chat.toPresentable()
+        } else if model.failed {
+            Text(WatchStrings.couldNotOpenChat).navigationTitle(name)
+        } else {
+            ProgressView().navigationTitle(name)
+        }
     }
 }

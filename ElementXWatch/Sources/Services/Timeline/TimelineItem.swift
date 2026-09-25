@@ -81,3 +81,12 @@ enum SendState: Equatable {
     case sending
     case failed
 }
+
+extension EventItem: Identifiable {
+    var id: String {
+        switch itemID {
+        case .eventId(let eventID): eventID
+        case .transactionId(let transactionID): transactionID
+        }
+    }
+}

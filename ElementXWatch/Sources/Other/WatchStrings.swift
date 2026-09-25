@@ -53,4 +53,15 @@ nonisolated enum WatchStrings {
     static let verified = "Verified session"
     static let unverified = "Unverified session"
     static let verificationUnknown = "Checking verification…"
+
+    static let reply = "Reply"
+    static let replyingTo = "Replying to"
+    static let sendFailed = "Couldn't send. Tap the message to retry."
+    static let failedTapToRetry = "Not sent · Tap to retry"
+    static let sending = "Sending…"
+    static let edited = "(edited)"
+    static let loadingOlder = "Loading older messages…"
+    static let couldNotOpenChat = "Couldn't open this chat."
+    static let ok = "OK"
+    static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
 }
