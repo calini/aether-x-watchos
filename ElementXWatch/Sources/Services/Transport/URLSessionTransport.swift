@@ -24,7 +24,7 @@ nonisolated final class URLSessionTransport: HttpTransport {
         let path = urlRequest.url?.path() ?? ""
 
         do {
-            let (data, response) = try await loadData(for: urlRequest)
+            let (data, response) = try await session.data(for: urlRequest)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw HttpTransportError.Network(message: "Received a non-HTTP response")
             }
@@ -38,22 +38,6 @@ nonisolated final class URLSessionTransport: HttpTransport {
             let code = (error as? URLError)?.code.rawValue ?? -1
             MXLog.info("\(request.method) \(path) failed with URLError \(code)")
             throw HttpTransportError.Network(message: error.localizedDescription)
-        }
-    }
-
-    /// Uses the completion-handler `dataTask`, not `session.data(for:)`: the async variant does not
-    /// honour a session's custom `URLProtocol` classes, which `StubURLProtocol` relies on in tests.
-    private func loadData(for urlRequest: URLRequest) async throws -> (Data, URLResponse) {
-        try await withCheckedThrowingContinuation { continuation in
-            session.dataTask(with: urlRequest) { data, response, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let data, let response {
-                    continuation.resume(returning: (data, response))
-                } else {
-                    continuation.resume(throwing: URLError(.badServerResponse))
-                }
-            }.resume()
         }
     }
 

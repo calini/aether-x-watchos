@@ -24,14 +24,15 @@ nonisolated final class StubURLProtocol: URLProtocol {
     }
 
     static func configuration() -> URLSessionConfiguration {
-        // .ephemeral, not .elementXWatch: on this simulator a session built from
-        // URLSessionConfiguration.default only sometimes consults a registered URLProtocol.
+        // .ephemeral, not .elementXWatch: on this simulator (confirmed on watchOS 27.0 and 26.5) a
+        // session built from URLSessionConfiguration.default only sometimes consults a registered
+        // URLProtocol at all, even for GET.
         let configuration = URLSessionConfiguration.ephemeral
         configuration.waitsForConnectivity = false
         configuration.protocolClasses = [StubURLProtocol.self]
-        // Route any request our protocol doesn't end up handling into a dead end: on this
-        // simulator the loading system can fall back to (or race) a live network fetch
-        // alongside a registered URLProtocol, which would otherwise silently hit example.org.
+        // Route any request our protocol doesn't end up handling into a dead end: on this simulator
+        // the loading system can fall back to (or race) a live network fetch alongside a registered
+        // URLProtocol, which would otherwise silently hit example.org.
         configuration.connectionProxyDictionary = [
             "HTTPEnable": 1, "HTTPProxy": "127.0.0.1", "HTTPPort": 1,
             "HTTPSEnable": 1, "HTTPSProxy": "127.0.0.1", "HTTPSPort": 1

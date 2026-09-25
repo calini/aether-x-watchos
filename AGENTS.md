@@ -7,7 +7,7 @@
 1. SDK fork at `../matrix-rust-sdk` (branch `watchos-http-transport`). Build it into the local package: `Tools/build-sdk.sh --dev` (simulator only) or `Tools/build-sdk.sh` (simulator + devices, incl. arm64_32).
 2. `xcodegen` — generates `ElementXWatch.xcodeproj` from `project.yml`. Never commit the project.
 3. Mocks: `sourcery --config Tools/Sourcery/AutoMockableConfig.yml` (also runs as a build phase).
-4. Tests: `xcodebuild test -project ElementXWatch.xcodeproj -scheme ElementXWatch -destination 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm)'`.
+4. Tests: `xcodebuild test -project ElementXWatch.xcodeproj -scheme ElementXWatch -destination 'platform=watchOS Simulator,name=Apple Watch Series 11 (46mm),OS=26.5'`. Pin `OS=26.5` — watchOS 27.0 has the same simulator networking quirk as 26.5 (see `URLSessionTransportTests`), but 26.5 matches the real test device (Series 9, watchOS 26) and is the version this was last verified against.
 5. Device: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig`, set `DEVELOPMENT_TEAM`.
 
 ## Conventions (inherited from element-x-ios AGENTS.md)
