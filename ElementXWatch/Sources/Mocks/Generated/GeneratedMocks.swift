@@ -104,6 +104,161 @@ nonisolated class ClientFactoryMock: ClientFactoryProtocol, @unchecked Sendable 
         }
     }
 }
+nonisolated class ClientProxyMock: ClientProxyProtocol, @unchecked Sendable {
+    var userID: String {
+        get { return underlyingUserID }
+        set(value) { underlyingUserID = value }
+    }
+    nonisolated(unsafe) var underlyingUserID: String!
+    nonisolated(unsafe) var deviceID: String?
+    var homeserver: String {
+        get { return underlyingHomeserver }
+        set(value) { underlyingHomeserver = value }
+    }
+    nonisolated(unsafe) var underlyingHomeserver: String!
+    var syncStatePublisher: AnyPublisher<SyncState, Never> {
+        get { return underlyingSyncStatePublisher }
+        set(value) { underlyingSyncStatePublisher = value }
+    }
+    nonisolated(unsafe) var underlyingSyncStatePublisher: AnyPublisher<SyncState, Never>!
+    var verificationStatePublisher: AnyPublisher<SessionVerification, Never> {
+        get { return underlyingVerificationStatePublisher }
+        set(value) { underlyingVerificationStatePublisher = value }
+    }
+    nonisolated(unsafe) var underlyingVerificationStatePublisher: AnyPublisher<SessionVerification, Never>!
+    var actionsPublisher: AnyPublisher<ClientProxyAction, Never> {
+        get { return underlyingActionsPublisher }
+        set(value) { underlyingActionsPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingActionsPublisher: AnyPublisher<ClientProxyAction, Never>!
+    var roomSummaryProvider: RoomSummaryProviderProtocol {
+        get { return underlyingRoomSummaryProvider }
+        set(value) { underlyingRoomSummaryProvider = value }
+    }
+    nonisolated(unsafe) var underlyingRoomSummaryProvider: RoomSummaryProviderProtocol!
+
+    //MARK: - startSync
+
+    private let startSyncCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startSyncUnderlyingCallsCount = 0
+    var startSyncCallsCount: Int {
+        get { startSyncCallsCountLock.withLock { startSyncUnderlyingCallsCount } }
+        set { startSyncCallsCountLock.withLock { startSyncUnderlyingCallsCount = newValue } }
+    }
+    var startSyncCalled: Bool {
+        return startSyncCallsCount > 0
+    }
+    nonisolated(unsafe) var startSyncClosure: (() async -> Void)?
+
+    @concurrent func startSync() async {
+        startSyncCallsCountLock.withLock { startSyncUnderlyingCallsCount += 1 }
+        await startSyncClosure?()
+    }
+    //MARK: - stopSync
+
+    private let stopSyncCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopSyncUnderlyingCallsCount = 0
+    var stopSyncCallsCount: Int {
+        get { stopSyncCallsCountLock.withLock { stopSyncUnderlyingCallsCount } }
+        set { stopSyncCallsCountLock.withLock { stopSyncUnderlyingCallsCount = newValue } }
+    }
+    var stopSyncCalled: Bool {
+        return stopSyncCallsCount > 0
+    }
+    nonisolated(unsafe) var stopSyncClosure: (() async -> Void)?
+
+    @concurrent func stopSync() async {
+        stopSyncCallsCountLock.withLock { stopSyncUnderlyingCallsCount += 1 }
+        await stopSyncClosure?()
+    }
+    //MARK: - loadDisplayName
+
+    private let loadDisplayNameCallsCountLock = NSLock()
+    private nonisolated(unsafe) var loadDisplayNameUnderlyingCallsCount = 0
+    var loadDisplayNameCallsCount: Int {
+        get { loadDisplayNameCallsCountLock.withLock { loadDisplayNameUnderlyingCallsCount } }
+        set { loadDisplayNameCallsCountLock.withLock { loadDisplayNameUnderlyingCallsCount = newValue } }
+    }
+    var loadDisplayNameCalled: Bool {
+        return loadDisplayNameCallsCount > 0
+    }
+
+    private let loadDisplayNameReturnValueLock = NSLock()
+    private nonisolated(unsafe) var loadDisplayNameUnderlyingReturnValue: String?
+    var loadDisplayNameReturnValue: String? {
+        get { loadDisplayNameReturnValueLock.withLock { loadDisplayNameUnderlyingReturnValue } }
+        set { loadDisplayNameReturnValueLock.withLock { loadDisplayNameUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var loadDisplayNameClosure: (() async -> String?)?
+
+    @concurrent func loadDisplayName() async -> String? {
+        loadDisplayNameCallsCountLock.withLock { loadDisplayNameUnderlyingCallsCount += 1 }
+        if let loadDisplayNameClosure = loadDisplayNameClosure {
+            return await loadDisplayNameClosure()
+        } else {
+            return loadDisplayNameReturnValue
+        }
+    }
+    //MARK: - loadThumbnail
+
+    private let loadThumbnailForWidthHeightCallsCountLock = NSLock()
+    private nonisolated(unsafe) var loadThumbnailForWidthHeightUnderlyingCallsCount = 0
+    var loadThumbnailForWidthHeightCallsCount: Int {
+        get { loadThumbnailForWidthHeightCallsCountLock.withLock { loadThumbnailForWidthHeightUnderlyingCallsCount } }
+        set { loadThumbnailForWidthHeightCallsCountLock.withLock { loadThumbnailForWidthHeightUnderlyingCallsCount = newValue } }
+    }
+    var loadThumbnailForWidthHeightCalled: Bool {
+        return loadThumbnailForWidthHeightCallsCount > 0
+    }
+    private let loadThumbnailForWidthHeightReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var loadThumbnailForWidthHeightUnderlyingReceivedArguments: (source: MediaSourceProxy, width: Int, height: Int)?
+    var loadThumbnailForWidthHeightReceivedArguments: (source: MediaSourceProxy, width: Int, height: Int)? {
+        get { loadThumbnailForWidthHeightReceivedArgumentsLock.withLock { loadThumbnailForWidthHeightUnderlyingReceivedArguments } }
+        set { loadThumbnailForWidthHeightReceivedArgumentsLock.withLock { loadThumbnailForWidthHeightUnderlyingReceivedArguments = newValue } }
+    }
+    private let loadThumbnailForWidthHeightReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var loadThumbnailForWidthHeightUnderlyingReceivedInvocations: [(source: MediaSourceProxy, width: Int, height: Int)] = []
+    var loadThumbnailForWidthHeightReceivedInvocations: [(source: MediaSourceProxy, width: Int, height: Int)] {
+        get { loadThumbnailForWidthHeightReceivedInvocationsLock.withLock { loadThumbnailForWidthHeightUnderlyingReceivedInvocations } }
+        set { loadThumbnailForWidthHeightReceivedInvocationsLock.withLock { loadThumbnailForWidthHeightUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let loadThumbnailForWidthHeightReturnValueLock = NSLock()
+    private nonisolated(unsafe) var loadThumbnailForWidthHeightUnderlyingReturnValue: Data?
+    var loadThumbnailForWidthHeightReturnValue: Data? {
+        get { loadThumbnailForWidthHeightReturnValueLock.withLock { loadThumbnailForWidthHeightUnderlyingReturnValue } }
+        set { loadThumbnailForWidthHeightReturnValueLock.withLock { loadThumbnailForWidthHeightUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var loadThumbnailForWidthHeightClosure: ((MediaSourceProxy, Int, Int) async -> Data?)?
+
+    @concurrent func loadThumbnail(for source: MediaSourceProxy, width: Int, height: Int) async -> Data? {
+        loadThumbnailForWidthHeightCallsCountLock.withLock { loadThumbnailForWidthHeightUnderlyingCallsCount += 1 }
+        loadThumbnailForWidthHeightReceivedArguments = (source: source, width: width, height: height)
+        loadThumbnailForWidthHeightReceivedInvocationsLock.withLock { loadThumbnailForWidthHeightUnderlyingReceivedInvocations.append((source: source, width: width, height: height)) }
+        if let loadThumbnailForWidthHeightClosure = loadThumbnailForWidthHeightClosure {
+            return await loadThumbnailForWidthHeightClosure(source, width, height)
+        } else {
+            return loadThumbnailForWidthHeightReturnValue
+        }
+    }
+    //MARK: - logout
+
+    private let logoutCallsCountLock = NSLock()
+    private nonisolated(unsafe) var logoutUnderlyingCallsCount = 0
+    var logoutCallsCount: Int {
+        get { logoutCallsCountLock.withLock { logoutUnderlyingCallsCount } }
+        set { logoutCallsCountLock.withLock { logoutUnderlyingCallsCount = newValue } }
+    }
+    var logoutCalled: Bool {
+        return logoutCallsCount > 0
+    }
+    nonisolated(unsafe) var logoutClosure: (() async -> Void)?
+
+    @concurrent func logout() async {
+        logoutCallsCountLock.withLock { logoutUnderlyingCallsCount += 1 }
+        await logoutClosure?()
+    }
+}
 nonisolated class KeychainStoreMock: KeychainStoreProtocol, @unchecked Sendable {
 
     //MARK: - restorationToken

@@ -93,3 +93,8 @@ nonisolated extension SDKListener: GeneratedQrLoginProgressListener where T == G
 nonisolated extension SDKListener: VerificationStateListener where T == VerificationState {
     func onUpdate(status: VerificationState) { onUpdateClosure(status) }
 }
+
+nonisolated extension SDKListener {
+    /// Delivers a value to the listener's closure (for wrappers that aren't SDK listener protocols).
+    func forward(_ value: T) { onUpdateClosure(value) }
+}
