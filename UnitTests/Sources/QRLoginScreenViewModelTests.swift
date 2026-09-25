@@ -17,8 +17,8 @@ struct QRLoginScreenViewModelTests {
         let service = QRLoginServiceMock()
         let gate = AsyncGate()
         service.loginWithGeneratedQRCodeOnProgressClosure = { onProgress in
-            await onProgress(.showingQRCode(Data([1, 2])))
-            await onProgress(.waitingForApproval(userCode: "XY12"))
+            onProgress(.showingQRCode(Data([1, 2])))
+            onProgress(.waitingForApproval(userCode: "XY12"))
             await gate.wait()
             return .failure(.declined)
         }
@@ -59,7 +59,7 @@ struct QRLoginScreenViewModelTests {
 
         let stillShowingCode = AsyncGate() // Never opened: stays on the QR code for the rest of the test.
         service.loginWithGeneratedQRCodeOnProgressClosure = { onProgress in
-            await onProgress(.showingQRCode(Data([9])))
+            onProgress(.showingQRCode(Data([9])))
             await stillShowingCode.wait()
             return .failure(.unknown)
         }
@@ -74,9 +74,9 @@ struct QRLoginScreenViewModelTests {
         let service = QRLoginServiceMock()
         let gate = AsyncGate()
         service.loginWithGeneratedQRCodeOnProgressClosure = { onProgress in
-            await onProgress(.showingQRCode(Data([1])))
+            onProgress(.showingQRCode(Data([1])))
             await gate.wait()
-            await onProgress(.syncingSecrets)
+            onProgress(.syncingSecrets)
             return .failure(.unknown)
         }
         let viewModel = QRLoginScreenViewModel(qrLoginService: service)
@@ -96,7 +96,7 @@ struct QRLoginScreenViewModelTests {
         let service = QRLoginServiceMock()
         let stillEnteringCode = AsyncGate() // Never opened: the outer login task stays pending.
         service.loginWithGeneratedQRCodeOnProgressClosure = { onProgress in
-            await onProgress(.enteringCheckCode(sender))
+            onProgress(.enteringCheckCode(sender))
             await stillEnteringCode.wait()
             return .failure(.unknown)
         }
@@ -108,7 +108,7 @@ struct QRLoginScreenViewModelTests {
         viewModel.context.send(viewAction: .submitCheckCode)
 
         try await waitUntil { viewModel.context.viewState.step == .failed(.insecureConnection) }
-        #expect(await sender.sentCodes == [42])
+        #expect(sender.sentCodes == [42])
     }
 }
 
