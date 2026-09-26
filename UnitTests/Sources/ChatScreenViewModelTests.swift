@@ -376,6 +376,18 @@ struct ChatScreenViewModelTests {
     }
 
     @Test
+    func thePillTicksDownAMinuteOnEachOfTheSharesMinuteBoundaries() {
+        let banner = LiveShareBanner(endsAt: Self.shareEnd, isPaused: false)
+        let now = Self.shareEnd.addingTimeInterval(-11 * 60 - 30)
+
+        let start = banner.countdownStart(at: now)
+
+        #expect(start == Self.shareEnd.addingTimeInterval(-12 * 60))
+        let ticks = (0...12).map { start.addingTimeInterval(60 * Double($0)) }
+        #expect(ticks.map(banner.minutesLeft(at:)) == Array((0...12).reversed()))
+    }
+
+    @Test
     func ownRunningLiveBubblesOfferStop() async throws {
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([share(geoURI: park)])
         let liveState = CurrentValueSubject<LiveLocationState, Never>(.idle)

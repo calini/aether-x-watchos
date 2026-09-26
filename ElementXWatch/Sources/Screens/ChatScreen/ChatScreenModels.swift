@@ -69,6 +69,12 @@ struct LiveShareBanner: Equatable {
         let secondsLeft = endsAt.timeIntervalSince(date)
         return secondsLeft > 0 ? Int((secondsLeft / 60).rounded(.up)) : 0
     }
+
+    /// The share's minute boundary at or before `date`, so a countdown ticking every minute from it drops
+    /// exactly as each minute runs out.
+    func countdownStart(at date: Date) -> Date {
+        endsAt.addingTimeInterval(-60 * Double(minutesLeft(at: date)))
+    }
 }
 
 /// Each presentation gets its own ID, so reopening the same location shows a fresh map.

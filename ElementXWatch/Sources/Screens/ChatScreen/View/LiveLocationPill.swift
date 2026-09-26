@@ -40,17 +40,10 @@ struct LiveLocationPill: View {
         if banner.isPaused {
             Text(WatchStrings.liveLocationPaused)
         } else {
-            // Ticks on the share's own minute boundaries, so the count drops exactly as each minute runs out.
-            TimelineView(.periodic(from: countdownStart, by: 60)) { timeline in
+            TimelineView(.periodic(from: banner.countdownStart(at: .now), by: 60)) { timeline in
                 Text(WatchStrings.sharingLive(minutesLeft: banner.minutesLeft(at: timeline.date)))
             }
         }
-    }
-
-    /// A minute boundary of the share at or before now.
-    private var countdownStart: Date {
-        let minutesLeft = banner.minutesLeft(at: .now)
-        return banner.endsAt.addingTimeInterval(-60 * Double(minutesLeft))
     }
 }
 
