@@ -54,7 +54,7 @@ final class SessionVerificationControllerProxy: SessionVerificationControllerPro
             try await operation()
             return .success(())
         } catch {
-            MXLog.error("Session verification step failed (\(failure)): \(type(of: error))")
+            MXLog.error("Session verification step failed (\(failure)): \(error)")
             return .failure(failure)
         }
     }

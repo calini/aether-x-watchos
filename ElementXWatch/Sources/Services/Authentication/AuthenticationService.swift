@@ -75,8 +75,8 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
     private var pendingLogin: PendingLogin?
     private var lastServer: String?
     /// Bumped by every `reset()` (including the implicit one at the top of `configure`), so an
-    /// in-flight `configure` can tell, after an `await`, that a newer call or an explicit `reset()`
-    /// superseded it and its own client/directories must be thrown away instead of adopted.
+    /// in-flight `configure` or pending-login rebuild can tell, after an `await`, that a newer call or an
+    /// explicit `reset()` superseded it and its own client/directories must be thrown away instead of adopted.
     private var generation = 0
 
     init(clientFactory: ClientFactoryProtocol, sessionStore: SessionStoreProtocol) {
@@ -116,13 +116,13 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
     }
 
     func login(username: String, password: String) async -> Result<ClientProxyProtocol, AuthenticationError> {
-        guard let pending = pendingLogin else { return .failure(.unknown) }
+        guard let pending = await ensurePendingLogin() else { return .failure(.unknown) }
         let myGeneration = generation
 
         do {
             try await pending.client.login(username: username, password: password, initialDeviceName: Self.deviceName, deviceId: nil)
         } catch {
-            MXLog.error("Password login failed: \(type(of: error))")
+            MXLog.error("Password login failed: \(error)")
             return .failure(AuthenticationError(loginError: error))
         }
         guard myGeneration == generation else {
@@ -144,13 +144,7 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
     // Body moved verbatim from the old QRLoginService, except that it uses the pending login
     // (re-created for the last server if a previous attempt consumed it).
     func loginWithGeneratedQRCode(onProgress: @escaping @MainActor (QRLoginProgress) -> Void) async -> Result<ClientProxyProtocol, QRLoginError> {
-        if pendingLogin == nil {
-            let server = lastServer ?? WatchAppSettings.defaultServerName
-            if case .success(let login) = await makePendingLogin(server: server) {
-                pendingLogin = login
-            }
-        }
-        guard let pending = pendingLogin else { return .failure(.unknown) }
+        guard let pending = await ensurePendingLogin() else { return .failure(.unknown) }
         pendingLogin = nil // This attempt owns the directories from here on.
 
         // Set once the device exists server-side, so a late cancellation can still sign it out.
@@ -177,10 +171,30 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
             pending.directories.delete()
             return .failure(.cancelled)
         } catch {
-            MXLog.error("QR login failed unexpectedly: \(type(of: error))")
+            MXLog.error("QR login failed unexpectedly: \(error)")
             pending.directories.delete()
             return .failure(.unknown)
         }
+    }
+
+    /// The pending login, re-created for the last server when a QR attempt consumed it.
+    private func ensurePendingLogin() async -> PendingLogin? {
+        if let pendingLogin { return pendingLogin }
+        let myGeneration = generation
+        let server = lastServer ?? WatchAppSettings.defaultServerName
+        guard case .success(let login) = await makePendingLogin(server: server) else { return nil }
+        guard myGeneration == generation else {
+            // A reset() or configure() ran meanwhile and wins: these directories were never adopted.
+            login.directories.delete()
+            return nil
+        }
+        if let pendingLogin {
+            // A concurrent rebuild got there first.
+            login.directories.delete()
+            return pendingLogin
+        }
+        pendingLogin = login
+        return login
     }
 
     private func makePendingLogin(server: String) async -> Result<PendingLogin, AuthenticationError> {
@@ -211,7 +225,7 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
             MXLog.info("Signed in as \(userID)")
             return .success(try await ClientProxy.make(client: pending.client))
         } catch {
-            MXLog.error("Finishing sign-in failed: \(type(of: error))")
+            MXLog.error("Finishing sign-in failed: \(error)")
             if didSaveSession {
                 // clear() already deletes the saved token's directories, which are this attempt's.
                 sessionStore.clear()

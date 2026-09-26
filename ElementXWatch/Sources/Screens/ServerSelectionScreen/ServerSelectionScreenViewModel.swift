@@ -32,6 +32,8 @@ final class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, 
     private func configure() {
         guard state.canContinue else { return }
         let input = state.bindings.server
+        state.failedServer = nil
+        state.failureMessage = nil
         state.isLoading = true
 
         Task {

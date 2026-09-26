@@ -68,4 +68,26 @@ struct ServerSelectionScreenViewModelTests {
         viewModel.context.server = "example.org"
         #expect(viewModel.context.viewState.errorMessage == nil)
     }
+
+    @Test
+    func retryingTheSameInputHidesTheOldError() async throws {
+        let service = AuthenticationServiceMock()
+        service.configureServerReturnValue = .failure(.serverUnreachable)
+        let viewModel = ServerSelectionScreenViewModel(authenticationService: service)
+        viewModel.context.send(viewAction: .continue)
+        try await waitUntil { viewModel.context.viewState.errorMessage == WatchStrings.serverUnreachable }
+
+        let gate = AsyncGate()
+        service.configureServerClosure = { _ in
+            await gate.wait()
+            return .failure(.serverNotSupported)
+        }
+        viewModel.context.send(viewAction: .continue)
+
+        try await waitUntil { service.configureServerCallsCount == 2 }
+        #expect(viewModel.context.viewState.isLoading)
+        #expect(viewModel.context.viewState.errorMessage == nil)
+        await gate.open()
+        try await waitUntil { viewModel.context.viewState.errorMessage == WatchStrings.serverNotSupported }
+    }
 }

@@ -98,6 +98,56 @@ struct AuthenticationServiceTests {
         #expect(!FileManager.default.fileExists(atPath: latestDirectories.dataPath))
     }
 
+    @Test
+    func passwordLoginAfterAnAbandonedQRAttemptRebuildsThePendingLogin() async throws {
+        // `.invalid` never resolves, so the QR rendezvous POST and the password POST (which bypass
+        // StubURLProtocol on watchOS simulators) fail fast without touching a real server.
+        StubURLProtocol.install { request, _ in Self.homeserver(request, loginTypes: ["m.login.password"], msc4108: true) }
+        let keychain = KeychainStore(service: "tests.\(UUID().uuidString)")
+        let realFactory = ClientFactory(transport: URLSessionTransport(configuration: StubURLProtocol.configuration()),
+                                        sessionDelegate: SessionDelegate(keychainStore: keychain))
+        let factory = ClientFactoryMock()
+        let gate = AsyncGate()
+        // Only the first rebuild (the second factory call) is held open.
+        factory.makeLoginClientServerNameDirectoriesPassphraseClosure = { serverName, directories, passphrase in
+            if factory.makeLoginClientServerNameDirectoriesPassphraseCallsCount == 2 { await gate.wait() }
+            return try await realFactory.makeLoginClient(serverName: serverName, directories: directories, passphrase: passphrase)
+        }
+        let service = AuthenticationService(clientFactory: factory, sessionStore: SessionStore(keychainStore: keychain))
+        let server = "https://qr.invalid"
+
+        _ = try await service.configure(server: server).get()
+        let configuredDirectories = factory.makeLoginClientServerNameDirectoriesPassphraseReceivedInvocations[0].directories
+
+        // The QR attempt takes ownership of the configured login and deletes it when it fails.
+        let qrResult = await service.loginWithGeneratedQRCode { _ in }
+        #expect(qrResult.failureValue != nil)
+        #expect(!FileManager.default.fileExists(atPath: configuredDirectories.dataPath))
+
+        // Password login rebuilds a login client for the same server instead of failing straight away.
+        let heldLogin = Task { await service.login(username: "alice", password: "secret") }
+        try await waitUntil { factory.makeLoginClientServerNameDirectoriesPassphraseCallsCount == 2 }
+        try #require(factory.makeLoginClientServerNameDirectoriesPassphraseCallsCount == 2)
+        let heldRebuild = factory.makeLoginClientServerNameDirectoriesPassphraseReceivedInvocations[1]
+        #expect(heldRebuild.serverName == server)
+
+        // A reset during the rebuild wins: the stale rebuild deletes its own directories.
+        service.reset()
+        await gate.open()
+        #expect(await heldLogin.value.failureValue == .unknown)
+        #expect(!FileManager.default.fileExists(atPath: heldRebuild.directories.dataPath))
+
+        // An uninterrupted rebuild is adopted and reaches the network; it's kept for a retry.
+        let networkResult = await service.login(username: "alice", password: "secret")
+        #expect(networkResult.failureValue != nil)
+        try #require(factory.makeLoginClientServerNameDirectoriesPassphraseCallsCount == 3)
+        let adoptedRebuild = factory.makeLoginClientServerNameDirectoriesPassphraseReceivedInvocations[2]
+        #expect(adoptedRebuild.serverName == server)
+        #expect(FileManager.default.fileExists(atPath: adoptedRebuild.directories.dataPath))
+        service.reset()
+        #expect(!FileManager.default.fileExists(atPath: adoptedRebuild.directories.dataPath))
+    }
+
     // MARK: - Helpers
 
     private func makeService() -> AuthenticationService {
