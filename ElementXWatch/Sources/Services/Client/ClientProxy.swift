@@ -126,6 +126,15 @@ final class ClientProxy: ClientProxyProtocol {
         }
     }
 
+    func sessionVerificationController() async -> SessionVerificationControllerProxyProtocol? {
+        do {
+            return try await SessionVerificationControllerProxy(controller: client.getSessionVerificationController())
+        } catch {
+            MXLog.error("Failed to get the session verification controller: \(error)")
+            return nil
+        }
+    }
+
     /// Any send error disables that room's send queue until it's re-enabled (mirrors iOS): on every
     /// return to `.running`, and after an error that happened while running (debounced).
     private func observeSendQueues() {

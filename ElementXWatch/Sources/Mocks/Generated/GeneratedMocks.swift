@@ -404,6 +404,34 @@ nonisolated class ClientProxyMock: ClientProxyProtocol, @unchecked Sendable {
         logoutCallsCountLock.withLock { logoutUnderlyingCallsCount += 1 }
         await logoutClosure?()
     }
+    //MARK: - sessionVerificationController
+
+    private let sessionVerificationControllerCallsCountLock = NSLock()
+    private nonisolated(unsafe) var sessionVerificationControllerUnderlyingCallsCount = 0
+    var sessionVerificationControllerCallsCount: Int {
+        get { sessionVerificationControllerCallsCountLock.withLock { sessionVerificationControllerUnderlyingCallsCount } }
+        set { sessionVerificationControllerCallsCountLock.withLock { sessionVerificationControllerUnderlyingCallsCount = newValue } }
+    }
+    var sessionVerificationControllerCalled: Bool {
+        return sessionVerificationControllerCallsCount > 0
+    }
+
+    private let sessionVerificationControllerReturnValueLock = NSLock()
+    private nonisolated(unsafe) var sessionVerificationControllerUnderlyingReturnValue: SessionVerificationControllerProxyProtocol?
+    var sessionVerificationControllerReturnValue: SessionVerificationControllerProxyProtocol? {
+        get { sessionVerificationControllerReturnValueLock.withLock { sessionVerificationControllerUnderlyingReturnValue } }
+        set { sessionVerificationControllerReturnValueLock.withLock { sessionVerificationControllerUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var sessionVerificationControllerClosure: (() async -> SessionVerificationControllerProxyProtocol?)?
+
+    @concurrent func sessionVerificationController() async -> SessionVerificationControllerProxyProtocol? {
+        sessionVerificationControllerCallsCountLock.withLock { sessionVerificationControllerUnderlyingCallsCount += 1 }
+        if let sessionVerificationControllerClosure = sessionVerificationControllerClosure {
+            return await sessionVerificationControllerClosure()
+        } else {
+            return sessionVerificationControllerReturnValue
+        }
+    }
 }
 nonisolated class KeychainStoreMock: KeychainStoreProtocol, @unchecked Sendable {
 
@@ -636,6 +664,154 @@ nonisolated class SessionStoreMock: SessionStoreProtocol, @unchecked Sendable {
     func clear() {
         clearCallsCountLock.withLock { clearUnderlyingCallsCount += 1 }
         clearClosure?()
+    }
+}
+nonisolated class SessionVerificationControllerProxyMock: SessionVerificationControllerProxyProtocol, @unchecked Sendable {
+    var actionsPublisher: AnyPublisher<SessionVerificationControllerProxyAction, Never> {
+        get { return underlyingActionsPublisher }
+        set(value) { underlyingActionsPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingActionsPublisher: AnyPublisher<SessionVerificationControllerProxyAction, Never>!
+
+    //MARK: - requestDeviceVerification
+
+    private let requestDeviceVerificationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var requestDeviceVerificationUnderlyingCallsCount = 0
+    var requestDeviceVerificationCallsCount: Int {
+        get { requestDeviceVerificationCallsCountLock.withLock { requestDeviceVerificationUnderlyingCallsCount } }
+        set { requestDeviceVerificationCallsCountLock.withLock { requestDeviceVerificationUnderlyingCallsCount = newValue } }
+    }
+    var requestDeviceVerificationCalled: Bool {
+        return requestDeviceVerificationCallsCount > 0
+    }
+
+    private let requestDeviceVerificationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var requestDeviceVerificationUnderlyingReturnValue: Result<Void, SessionVerificationControllerProxyError>!
+    var requestDeviceVerificationReturnValue: Result<Void, SessionVerificationControllerProxyError>! {
+        get { requestDeviceVerificationReturnValueLock.withLock { requestDeviceVerificationUnderlyingReturnValue } }
+        set { requestDeviceVerificationReturnValueLock.withLock { requestDeviceVerificationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var requestDeviceVerificationClosure: (() async -> Result<Void, SessionVerificationControllerProxyError>)?
+
+    @concurrent func requestDeviceVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        requestDeviceVerificationCallsCountLock.withLock { requestDeviceVerificationUnderlyingCallsCount += 1 }
+        if let requestDeviceVerificationClosure = requestDeviceVerificationClosure {
+            return await requestDeviceVerificationClosure()
+        } else {
+            return requestDeviceVerificationReturnValue
+        }
+    }
+    //MARK: - startSasVerification
+
+    private let startSasVerificationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startSasVerificationUnderlyingCallsCount = 0
+    var startSasVerificationCallsCount: Int {
+        get { startSasVerificationCallsCountLock.withLock { startSasVerificationUnderlyingCallsCount } }
+        set { startSasVerificationCallsCountLock.withLock { startSasVerificationUnderlyingCallsCount = newValue } }
+    }
+    var startSasVerificationCalled: Bool {
+        return startSasVerificationCallsCount > 0
+    }
+
+    private let startSasVerificationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var startSasVerificationUnderlyingReturnValue: Result<Void, SessionVerificationControllerProxyError>!
+    var startSasVerificationReturnValue: Result<Void, SessionVerificationControllerProxyError>! {
+        get { startSasVerificationReturnValueLock.withLock { startSasVerificationUnderlyingReturnValue } }
+        set { startSasVerificationReturnValueLock.withLock { startSasVerificationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var startSasVerificationClosure: (() async -> Result<Void, SessionVerificationControllerProxyError>)?
+
+    @concurrent func startSasVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        startSasVerificationCallsCountLock.withLock { startSasVerificationUnderlyingCallsCount += 1 }
+        if let startSasVerificationClosure = startSasVerificationClosure {
+            return await startSasVerificationClosure()
+        } else {
+            return startSasVerificationReturnValue
+        }
+    }
+    //MARK: - approveVerification
+
+    private let approveVerificationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var approveVerificationUnderlyingCallsCount = 0
+    var approveVerificationCallsCount: Int {
+        get { approveVerificationCallsCountLock.withLock { approveVerificationUnderlyingCallsCount } }
+        set { approveVerificationCallsCountLock.withLock { approveVerificationUnderlyingCallsCount = newValue } }
+    }
+    var approveVerificationCalled: Bool {
+        return approveVerificationCallsCount > 0
+    }
+
+    private let approveVerificationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var approveVerificationUnderlyingReturnValue: Result<Void, SessionVerificationControllerProxyError>!
+    var approveVerificationReturnValue: Result<Void, SessionVerificationControllerProxyError>! {
+        get { approveVerificationReturnValueLock.withLock { approveVerificationUnderlyingReturnValue } }
+        set { approveVerificationReturnValueLock.withLock { approveVerificationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var approveVerificationClosure: (() async -> Result<Void, SessionVerificationControllerProxyError>)?
+
+    @concurrent func approveVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        approveVerificationCallsCountLock.withLock { approveVerificationUnderlyingCallsCount += 1 }
+        if let approveVerificationClosure = approveVerificationClosure {
+            return await approveVerificationClosure()
+        } else {
+            return approveVerificationReturnValue
+        }
+    }
+    //MARK: - declineVerification
+
+    private let declineVerificationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var declineVerificationUnderlyingCallsCount = 0
+    var declineVerificationCallsCount: Int {
+        get { declineVerificationCallsCountLock.withLock { declineVerificationUnderlyingCallsCount } }
+        set { declineVerificationCallsCountLock.withLock { declineVerificationUnderlyingCallsCount = newValue } }
+    }
+    var declineVerificationCalled: Bool {
+        return declineVerificationCallsCount > 0
+    }
+
+    private let declineVerificationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var declineVerificationUnderlyingReturnValue: Result<Void, SessionVerificationControllerProxyError>!
+    var declineVerificationReturnValue: Result<Void, SessionVerificationControllerProxyError>! {
+        get { declineVerificationReturnValueLock.withLock { declineVerificationUnderlyingReturnValue } }
+        set { declineVerificationReturnValueLock.withLock { declineVerificationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var declineVerificationClosure: (() async -> Result<Void, SessionVerificationControllerProxyError>)?
+
+    @concurrent func declineVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        declineVerificationCallsCountLock.withLock { declineVerificationUnderlyingCallsCount += 1 }
+        if let declineVerificationClosure = declineVerificationClosure {
+            return await declineVerificationClosure()
+        } else {
+            return declineVerificationReturnValue
+        }
+    }
+    //MARK: - cancelVerification
+
+    private let cancelVerificationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var cancelVerificationUnderlyingCallsCount = 0
+    var cancelVerificationCallsCount: Int {
+        get { cancelVerificationCallsCountLock.withLock { cancelVerificationUnderlyingCallsCount } }
+        set { cancelVerificationCallsCountLock.withLock { cancelVerificationUnderlyingCallsCount = newValue } }
+    }
+    var cancelVerificationCalled: Bool {
+        return cancelVerificationCallsCount > 0
+    }
+
+    private let cancelVerificationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var cancelVerificationUnderlyingReturnValue: Result<Void, SessionVerificationControllerProxyError>!
+    var cancelVerificationReturnValue: Result<Void, SessionVerificationControllerProxyError>! {
+        get { cancelVerificationReturnValueLock.withLock { cancelVerificationUnderlyingReturnValue } }
+        set { cancelVerificationReturnValueLock.withLock { cancelVerificationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var cancelVerificationClosure: (() async -> Result<Void, SessionVerificationControllerProxyError>)?
+
+    @concurrent func cancelVerification() async -> Result<Void, SessionVerificationControllerProxyError> {
+        cancelVerificationCallsCountLock.withLock { cancelVerificationUnderlyingCallsCount += 1 }
+        if let cancelVerificationClosure = cancelVerificationClosure {
+            return await cancelVerificationClosure()
+        } else {
+            return cancelVerificationReturnValue
+        }
     }
 }
 nonisolated class TimelineProxyMock: TimelineProxyProtocol, @unchecked Sendable {

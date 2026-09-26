@@ -19,6 +19,7 @@ extension ClientProxyMock {
         mock.userID = "@alice:matrix.org"
         mock.loadDisplayNameReturnValue = "Alice"
         mock.timelineProxyForReturnValue = nil
+        mock.sessionVerificationControllerReturnValue = nil
         return mock
     }
 }
