@@ -1,4 +1,4 @@
-# CMake toolchain for arm64_32-apple-watchos, used only to work around a bug in the
+# CMake toolchain for arm64_32-apple-watchos, used only to work around two problems in the
 # aws-lc-sys crate that the SDK build pulls in transitively (via reqwest's TLS, which
 # the watch never actually uses — see AGENTS.md and Tools/build-sdk.sh).
 #
@@ -17,3 +17,8 @@ set(CMAKE_SYSTEM_NAME watchOS)
 set(CMAKE_OSX_ARCHITECTURES arm64_32)
 set(CMAKE_OSX_SYSROOT watchos)
 set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0)
+
+# aws-lc's arm64 assembly assumes 64-bit words, which arm64_32 doesn't have, so build its portable C
+# implementation instead. This is what AWS_LC_SYS_NO_ASM would do, without that variable's
+# opt-level 0 requirement.
+set(OPENSSL_NO_ASM ON CACHE BOOL "" FORCE)

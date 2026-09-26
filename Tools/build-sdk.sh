@@ -8,24 +8,23 @@ PACKAGE="$ROOT/Packages/MatrixRustSDK"
 
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
-# aws-lc's assembly mixes 64-bit limbs with arm64_32's 32-bit words; it is only used by reqwest's TLS,
-# which the watch never uses (all traffic goes through URLSession).
-export AWS_LC_SYS_NO_ASM=1
-# aws-lc-sys's cmake builder maps Rust's arm64_32-apple-watchos to CMAKE_OSX_ARCHITECTURES=arm64
-# (it only looks at CARGO_CFG_TARGET_ARCH, "aarch64" for both arm64 and arm64_32 watchOS targets),
-# so every object it compiles for arm64_32 comes out mislabelled as arm64 and fails to lipo
-# together with the real arm64 device slice. Route that one target through a toolchain file that
-# sets the Apple CMake variables correctly; see the file for details.
+# aws-lc (reqwest's TLS, which the watch never uses: all traffic goes through URLSession) needs two
+# fixes for arm64_32, applied to that target only:
+# - Its cmake builder maps arm64_32-apple-watchos to CMAKE_OSX_ARCHITECTURES=arm64 (it only looks at
+#   CARGO_CFG_TARGET_ARCH, "aarch64" for both watchOS device targets), so the objects fail to lipo
+#   with the real arm64 slice. The toolchain file sets the Apple CMake variables correctly.
+# - Its assembly mixes 64-bit limbs with arm64_32's 32-bit words. The toolchain file also turns on
+#   OPENSSL_NO_ASM. Don't use AWS_LC_SYS_NO_ASM instead: it only allows opt-level 0, which the
+#   SDK's reldbg profile doesn't give dependencies.
+# The cc builder ignores the toolchain file, so force the cmake one for arm64_32.
+export AWS_LC_SYS_CMAKE_BUILDER_arm64_32_apple_watchos=1
 export CMAKE_TOOLCHAIN_FILE_arm64_32_apple_watchos="$ROOT/Tools/watchos-arm64_32.toolchain.cmake"
 
 if [[ "${1:-}" == "--dev" ]]; then
   PROFILE=dev
   TARGETS=(--target aarch64-apple-watchos-sim)
 else
-  # reldbg forces aws-lc-sys to opt-level 3 (via its package."*" override), which panics
-  # under AWS_LC_SYS_NO_ASM=1. The fork's `watch` profile inherits reldbg but keeps
-  # aws-lc-sys at opt-level 0, since aws-lc only backs reqwest's TLS (unused on the watch).
-  PROFILE=watch
+  PROFILE=reldbg
   TARGETS=(--target aarch64-apple-watchos-sim --target aarch64-apple-watchos --target arm64_32-apple-watchos)
 fi
 
