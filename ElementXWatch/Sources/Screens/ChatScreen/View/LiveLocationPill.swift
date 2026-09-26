@@ -15,11 +15,19 @@ struct LiveLocationPill: View {
     var body: some View {
         HStack(spacing: 6) {
             status
-                .font(.footnote)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+                .font(.caption2)
+                // The countdown stays on one line; the longer paused copy may wrap rather than truncate.
+                .lineLimit(banner.isPaused ? 2 : 1)
+                .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            StopLiveLocationButton(action: onStop)
+            Button(action: onStop) {
+                Image(compound: \.stopSolid)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(RoundStopButtonStyle())
+            .accessibilityLabel(WatchStrings.stop)
         }
         .padding(.leading, 12)
         .padding(.trailing, 4)
@@ -79,12 +87,38 @@ private struct SmallGlassButtonStyle: ButtonStyle {
     }
 }
 
+private struct RoundStopButtonStyle: ButtonStyle {
+    private static let size: CGFloat = 32
+
+    func makeBody(configuration: Configuration) -> some View {
+        if #available(watchOS 26, *) {
+            label(configuration)
+                .glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            label(configuration)
+                .background(Color.compound.bgCriticalSubtle, in: Circle())
+                .opacity(configuration.isPressed ? 0.6 : 1)
+        }
+    }
+
+    private func label(_ configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(Color.compound.iconCriticalPrimary)
+            .frame(width: Self.size, height: Self.size)
+            .contentShape(Circle())
+    }
+}
+
+/// Opaque under the glass: messages scroll beneath the pill and would otherwise show through its text.
 private struct PillBackground: ViewModifier {
     func body(content: Content) -> some View {
+        let backing = Capsule().fill(Color.compound.bgCanvasDefault.opacity(0.9))
         if #available(watchOS 26, *) {
-            content.glassEffect(.regular, in: .capsule)
+            content
+                .glassEffect(.regular, in: .capsule)
+                .background(backing)
         } else {
-            content.background(.ultraThinMaterial, in: Capsule())
+            content.background(.ultraThinMaterial, in: Capsule()).background(backing)
         }
     }
 }

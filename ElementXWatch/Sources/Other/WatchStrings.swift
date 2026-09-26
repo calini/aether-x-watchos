@@ -128,7 +128,8 @@ nonisolated enum WatchStrings {
 
     /// "📍 Sharing live · 12 min left"
     static func sharingLive(minutesLeft: Int) -> String {
-        "📍 Sharing live · \(minutesLeft) min left"
+        // A no-break space keeps the number with its unit.
+        "📍 Sharing live · \(minutesLeft)\u{00A0}min left"
     }
 
     /// "Live · updated 30 s ago", rounded down to seconds, minutes or hours.
