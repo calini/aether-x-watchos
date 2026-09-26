@@ -53,6 +53,13 @@ struct URLSessionTransportTests {
     }
 
     @Test
+    func clampsAnUnboundedSDKTimeoutToTheResourceTimeout() throws {
+        let request = try URLSessionTransport.makeURLRequest(from: .init(method: "GET", url: "https://example.org", headers: [], body: Data(), timeoutMs: UInt64.max))
+        #expect(request.timeoutInterval == 300)
+        #expect(URLSessionConfiguration.elementXWatch.timeoutIntervalForResource == 300)
+    }
+
+    @Test
     func fallsBackToALongTimeoutSoLongPollsAreNotCut() throws {
         let request = try URLSessionTransport.makeURLRequest(from: .init(method: "GET", url: "https://example.org", headers: [], body: Data(), timeoutMs: nil))
         #expect(request.timeoutInterval == URLSessionTransport.fallbackTimeout)

@@ -12,6 +12,9 @@ import MatrixRustSDK
 nonisolated final class URLSessionTransport: HttpTransport {
     /// Used when the SDK gives no timeout; longer than a sync long-poll so it's never cut short.
     static let fallbackTimeout: TimeInterval = 120
+    /// The session's resource timeout, which caps every request anyway. The SDK's media fetcher asks for
+    /// `Duration::MAX` (`UInt64.max` ms), which must not reach `URLRequest` as an absurd interval.
+    static let maximumTimeout: TimeInterval = 300
 
     private let session: URLSession
 
@@ -49,7 +52,7 @@ nonisolated final class URLSessionTransport: HttpTransport {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = request.method
         urlRequest.httpBody = request.body.isEmpty ? nil : request.body
-        urlRequest.timeoutInterval = request.timeoutMs.map { max(TimeInterval($0) / 1000, 1) } ?? fallbackTimeout
+        urlRequest.timeoutInterval = request.timeoutMs.map { min(max(TimeInterval($0) / 1000, 1), maximumTimeout) } ?? fallbackTimeout
         for header in request.headers {
             urlRequest.addValue(header.value, forHTTPHeaderField: header.name)
         }
@@ -72,7 +75,7 @@ extension URLSessionConfiguration {
         configuration.allowsCellularAccess = true
         configuration.allowsExpensiveNetworkAccess = true
         configuration.allowsConstrainedNetworkAccess = true
-        configuration.timeoutIntervalForResource = 300
+        configuration.timeoutIntervalForResource = URLSessionTransport.maximumTimeout
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
