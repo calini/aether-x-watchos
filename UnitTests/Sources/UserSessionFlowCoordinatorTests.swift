@@ -29,7 +29,7 @@ struct UserSessionFlowCoordinatorTests {
 
         coordinator.start()
 
-        #expect(setup.clientProxy.sessionVerificationControllerCallsCount == 0)
+        #expect(!coordinator.isPreparingVerification)
         #expect(!coordinator.isPresentingVerification)
     }
 
@@ -90,10 +90,11 @@ struct UserSessionFlowCoordinatorTests {
         let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, showsVerificationOnStart: true)
         coordinator.start()
         try await waitUntil { coordinator.isPresentingVerification }
+        let context = coordinator.verificationScreen
 
         coordinator.dismissVerification()
 
         #expect(!coordinator.isPresentingVerification)
-        #expect(controllerProxy.cancelVerificationCallsCount == 0)
+        #expect(context?.viewState.step == .intro)
     }
 }

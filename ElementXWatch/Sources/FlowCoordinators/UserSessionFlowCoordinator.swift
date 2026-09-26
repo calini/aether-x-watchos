@@ -34,7 +34,8 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
     private var cancellables = Set<AnyCancellable>()
     // Lives and dies with the presented verification, so a dismissed screen's late action is ignored.
     private var verificationCancellable: AnyCancellable?
-    private var isPreparingVerification = false
+    /// Set synchronously while the controller loads; also a test hook.
+    private(set) var isPreparingVerification = false
 
     var actionsPublisher: AnyPublisher<UserSessionFlowCoordinatorAction, Never> {
         actionsSubject.eraseToAnyPublisher()
