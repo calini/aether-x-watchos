@@ -267,6 +267,63 @@ struct LiveLocationServiceTests {
     }
 
     @Test
+    func doesNotStopAReplacedShareWithoutLocationAccess() async {
+        let harness = Harness()
+        harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
+        harness.liveLocations("!a").send([.own(beaconID: "$newer", endDate: harness.date(900))])
+        harness.locationProvider.authorization = .denied
+
+        await harness.service.restore()
+
+        #expect(harness.store.record == nil)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 0)
+    }
+
+    @Test
+    func startingStopsASavedShareThatWasNotResumed() async {
+        let harness = Harness()
+        harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
+
+        let result = await harness.service.start(roomID: "!b", duration: .seconds(900))
+
+        #expect(result.failure == nil)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
+        #expect(harness.store.record?.roomID == "!b")
+    }
+
+    @Test
+    func restoringDuringAStartStopsTheSavedShare() async throws {
+        let harness = Harness()
+        harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
+        harness.unavailableRoomIDs = ["!a"]
+        await harness.service.restore()
+        #expect(harness.store.record?.roomID == "!a")
+
+        let gate = AsyncGate()
+        harness.room("!b").startLiveLocationShareDurationClosure = { _ in
+            await gate.wait()
+            return .success("$beacon-!b")
+        }
+        let starting = Task { await harness.service.start(roomID: "!b", duration: .seconds(900)) }
+        try await waitUntil { harness.room("!b").startLiveLocationShareDurationCalled }
+
+        // The room list loads meanwhile and the session restores again.
+        harness.unavailableRoomIDs = []
+        harness.liveLocations("!a").send([.own(beaconID: "$beacon-!a", endDate: harness.date(600))])
+        await harness.service.restore()
+        await gate.open()
+        let result = await starting.value
+
+        #expect(result.failure == nil)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
+        #expect(harness.service.state == .sharing(roomID: "!b", endsAt: harness.date(900), isPaused: false))
+        #expect(harness.store.record?.roomID == "!b")
+        harness.updates.send(.home)
+        try await waitUntil { harness.room("!b").sendLiveLocationCallsCount == 1 }
+        #expect(harness.room("!a").sendLiveLocationCallsCount == 0)
+    }
+
+    @Test
     func startingDuringARestoreStopsTheRestoredShare() async throws {
         let harness = Harness()
         harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))

@@ -168,6 +168,7 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         }
         await restoreTask?.value
         await stop()
+        await abandonSavedShare()
 
         // Started first so Core Location warms up while the share is created.
         startReceivingUpdates()
@@ -217,23 +218,25 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             MXLog.info("Room \(record.roomID) isn't available yet, keeping the saved live location share")
             return
         }
-        guard locationProvider.authorization == .authorized else {
-            MXLog.info("No location access, stopping the saved live location share")
-            await abandon(record, in: roomProxy)
-            return
-        }
 
         let status = await savedShareStatus(record, in: roomProxy)
         guard activeShare == nil, store.load() == record else { return }
 
         switch status {
+        case .ended, .replaced:
+            // No SDK stop: it acts on the room, so it would end a share from another device.
+            MXLog.info("The saved live location share is no longer ours to resume")
+            store.clear()
+        case .live where isStarting:
+            MXLog.info("A new live location share is starting, stopping the saved one")
+            await abandon(record, in: roomProxy)
+        case .live where locationProvider.authorization != .authorized:
+            MXLog.info("No location access, stopping the saved live location share")
+            await abandon(record, in: roomProxy)
         case .live:
             MXLog.info("Resuming the live location share in \(record.roomID)")
             startReceivingUpdates()
             begin(ActiveShare(roomID: record.roomID, roomProxy: roomProxy, eventID: record.eventID, endsAt: record.endsAt))
-        case .ended, .replaced:
-            MXLog.info("The saved live location share is no longer ours to resume")
-            store.clear()
         case .unknown:
             // Otherwise it would stay live on the server, with a stale location and nothing to stop it.
             MXLog.info("The room's live shares didn't load in time, stopping the saved live location share")
@@ -241,9 +244,27 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         }
     }
 
+    /// Ends a saved share that wasn't resumed, so it can't stay live next to a new one.
+    private func abandonSavedShare() async {
+        guard let record = store.load() else { return }
+        guard record.endsAt > now() else {
+            store.clear()
+            return
+        }
+        guard let roomProxy = await roomProvider(record.roomID) else {
+            // Kept, so a restore once the room is available can still stop it.
+            MXLog.info("Room \(record.roomID) isn't available yet, can't stop the saved live location share")
+            return
+        }
+        MXLog.info("Stopping the saved live location share in \(record.roomID) before starting a new one")
+        await abandon(record, in: roomProxy)
+    }
+
     /// Best effort: if the stop fails, the share still expires on its own.
     private func abandon(_ record: LiveLocationShareRecord, in roomProxy: RoomLocationProxyProtocol) async {
-        store.clear()
+        if store.load() == record {
+            store.clear()
+        }
         if case .failure = await roomProxy.stopLiveLocationShare() {
             MXLog.error("Stopping the saved live location share in \(record.roomID) failed")
         }
