@@ -18,4 +18,27 @@ struct LocationProviderTests {
         #expect(LocationAuthorization(.authorizedWhenInUse) == .authorized)
         #expect(LocationAuthorization(.authorizedAlways) == .authorized)
     }
+
+    @Test
+    func recentFixUsesAValidRecentLocation() throws {
+        let now = Date.now
+        let fix = try #require(LocationProvider.recentFix(location(accuracy: 12, age: 30, now: now), now: now))
+        #expect(fix == GeoURI(latitude: 51.5, longitude: -0.12, uncertainty: 12))
+    }
+
+    @Test
+    func recentFixRejectsStaleInvalidOrMissingLocations() {
+        let now = Date.now
+        #expect(LocationProvider.recentFix(location(accuracy: 12, age: 61, now: now), now: now) == nil)
+        #expect(LocationProvider.recentFix(location(accuracy: -1, age: 0, now: now), now: now) == nil)
+        #expect(LocationProvider.recentFix(nil, now: now) == nil)
+    }
+
+    private func location(accuracy: Double, age: TimeInterval, now: Date) -> CLLocation {
+        CLLocation(coordinate: CLLocationCoordinate2D(latitude: 51.5, longitude: -0.12),
+                   altitude: 0,
+                   horizontalAccuracy: accuracy,
+                   verticalAccuracy: -1,
+                   timestamp: now.addingTimeInterval(-age))
+    }
 }

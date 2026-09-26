@@ -47,11 +47,21 @@ extension LocationAuthorization {
 final class LocationProvider: NSObject, LocationProviderProtocol {
     private typealias FixContinuation = CheckedContinuation<Result<GeoURI, LocationError>, Never>
 
+    private struct PendingFix {
+        let continuation: FixContinuation
+        let timeout: Duration
+        /// Only started once authorized, so the first-use permission prompt doesn't eat into the timeout.
+        var timeoutTask: Task<Void, Never>?
+    }
+
+    /// How old `CLLocationManager.location` may be to answer a one-shot request during a live share.
+    static let maximumCachedFixAge: TimeInterval = 60
+
     private let manager = CLLocationManager()
     private let authorizationSubject: CurrentValueSubject<LocationAuthorization, Never>
     private let updatesSubject = PassthroughSubject<GeoURI, Never>()
-    /// One-shot requests awaiting a fix, each with its timeout. Removed on first result so each resumes exactly once.
-    private var pendingFixes: [UUID: (continuation: FixContinuation, timeoutTask: Task<Void, Never>)] = [:]
+    /// One-shot requests awaiting a fix. Removed on first result so each resumes exactly once.
+    private var pendingFixes: [UUID: PendingFix] = [:]
     private var isUpdating = false
 
     var authorization: LocationAuthorization { authorizationSubject.value }
@@ -74,19 +84,23 @@ final class LocationProvider: NSObject, LocationProviderProtocol {
 
     func currentLocation(timeout: Duration) async -> Result<GeoURI, LocationError> {
         guard authorization != .denied else { return .failure(.denied) }
-        requestAuthorization()
+        // `requestLocation()` would cancel continuous updates, so a live share answers from its latest fix.
+        if isUpdating, let fix = Self.recentFix(manager.location, now: .now) {
+            return .success(fix)
+        }
 
         let id = UUID()
         return await withCheckedContinuation { continuation in
-            // Strongly captures self so a pending request can't outlive the provider unresolved.
-            let timeoutTask = Task {
-                try? await Task.sleep(for: timeout)
-                guard !Task.isCancelled else { return }
-                MXLog.info("Location request timed out")
-                self.finishFix(id, with: .failure(.timedOut))
+            pendingFixes[id] = PendingFix(continuation: continuation, timeout: timeout)
+            if authorization == .authorized {
+                startTimeout(for: id)
+                // During a live share the next update settles the request instead.
+                if !isUpdating {
+                    manager.requestLocation()
+                }
+            } else {
+                requestAuthorization()
             }
-            pendingFixes[id] = (continuation, timeoutTask)
-            manager.requestLocation()
         }
     }
 
@@ -105,11 +119,33 @@ final class LocationProvider: NSObject, LocationProviderProtocol {
         isUpdating = false
         manager.stopUpdatingLocation()
         manager.allowsBackgroundLocationUpdates = false
+        // Stopping also cancels any in-flight `requestLocation()`, so reissue it for requests still waiting.
+        if !pendingFixes.isEmpty, authorization == .authorized {
+            manager.requestLocation()
+        }
+    }
+
+    /// `location` as a fix if it is valid (non-negative accuracy) and at most `maximumCachedFixAge` old.
+    static func recentFix(_ location: CLLocation?, now: Date) -> GeoURI? {
+        guard let location, location.horizontalAccuracy >= 0,
+              now.timeIntervalSince(location.timestamp) <= maximumCachedFixAge else { return nil }
+        return GeoURI(location)
+    }
+
+    private func startTimeout(for id: UUID) {
+        guard let timeout = pendingFixes[id]?.timeout, pendingFixes[id]?.timeoutTask == nil else { return }
+        // Strongly captures self so a pending request can't outlive the provider unresolved.
+        pendingFixes[id]?.timeoutTask = Task {
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            MXLog.info("Location request timed out")
+            self.finishFix(id, with: .failure(.timedOut))
+        }
     }
 
     private func finishFix(_ id: UUID, with result: Result<GeoURI, LocationError>) {
         guard let pending = pendingFixes.removeValue(forKey: id) else { return }
-        pending.timeoutTask.cancel()
+        pending.timeoutTask?.cancel()
         pending.continuation.resume(returning: result)
     }
 
@@ -126,17 +162,24 @@ extension LocationProvider: CLLocationManagerDelegate {
         guard authorization != authorizationSubject.value else { return }
         MXLog.info("Location authorization changed: \(authorization)")
         authorizationSubject.send(authorization)
-        if authorization == .denied {
+
+        switch authorization {
+        case .denied:
             finishAllFixes(with: .failure(.denied))
+        case .authorized where !pendingFixes.isEmpty:
+            Array(pendingFixes.keys).forEach(startTimeout)
+            if !isUpdating {
+                manager.requestLocation()
+            }
+        case .authorized, .notDetermined:
+            break
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         // A negative accuracy marks an invalid fix.
         guard let location = locations.last(where: { $0.horizontalAccuracy >= 0 }) else { return }
-        let geoURI = GeoURI(latitude: location.coordinate.latitude,
-                            longitude: location.coordinate.longitude,
-                            uncertainty: location.horizontalAccuracy)
+        let geoURI = GeoURI(location)
         finishAllFixes(with: .success(geoURI))
         if isUpdating {
             updatesSubject.send(geoURI)
@@ -145,7 +188,17 @@ extension LocationProvider: CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
         MXLog.error("Location request failed: \(error)")
-        let isDenied = (error as? CLError)?.code == .denied
-        finishAllFixes(with: .failure(isDenied ? .denied : .failed))
+        let code = (error as? CLError)?.code
+        // Transient during continuous updates: the next fix (or the timeout) settles pending requests.
+        if isUpdating, code == .locationUnknown { return }
+        finishAllFixes(with: .failure(code == .denied ? .denied : .failed))
+    }
+}
+
+private extension GeoURI {
+    init(_ location: CLLocation) {
+        self.init(latitude: location.coordinate.latitude,
+                  longitude: location.coordinate.longitude,
+                  uncertainty: location.horizontalAccuracy)
     }
 }
