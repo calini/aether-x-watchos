@@ -36,6 +36,7 @@ struct PasswordLoginScreenViewModelTests {
         try await waitUntil { signedIn != nil }
         #expect(signedIn === clientProxy)
         #expect(service.loginUsernamePasswordReceivedArguments?.username == "alice")
+        #expect(viewModel.context.viewState.bindings.password.isEmpty)
         cancellable.cancel()
     }
 

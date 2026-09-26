@@ -39,11 +39,11 @@ final class PasswordLoginScreenViewModel: PasswordLoginScreenViewModelType, Pass
         Task {
             let result = await authenticationService.login(username: username, password: password)
             state.isLoading = false
+            state.bindings.password = ""
             switch result {
             case .success(let clientProxy):
                 actionsSubject.send(.signedIn(clientProxy))
             case .failure(let error):
-                state.bindings.password = ""
                 state.errorMessage = error.message
             }
         }
