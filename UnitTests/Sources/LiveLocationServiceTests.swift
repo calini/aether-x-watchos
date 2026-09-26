@@ -97,20 +97,25 @@ struct LiveLocationServiceTests {
     }
 
     @Test
-    func notReadyFailuresBeforeTheShareIsLiveDontPause() async throws {
+    func notReadyFailuresPauseOnceTheConfirmationWaitIsOver() async throws {
         let harness = Harness()
         harness.room("!a").sendLiveLocationReturnValue = .failure(.beaconNotReady)
         _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
         harness.updates.send(.home)
 
-        for attempt in 1...4 {
+        // Nothing goes out before 30 s, so every attempt after that counts: sync never delivered the share.
+        for attempt in 1...2 {
             try await waitUntil { harness.clock.deadlines == [.seconds(30 * attempt)] }
             harness.clock.advance(by: .seconds(30))
             try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == attempt }
         }
-        try await waitUntil { harness.clock.deadlines == [.seconds(150)] }
-
+        try await waitUntil { harness.clock.deadlines == [.seconds(90)] }
         #expect(harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(900), isPaused: false))
+
+        harness.clock.advance(by: .seconds(30))
+
+        try await waitUntil { harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(900), isPaused: true) }
+        #expect(harness.room("!a").sendLiveLocationCallsCount == 3)
     }
 
     @Test
@@ -224,6 +229,54 @@ struct LiveLocationServiceTests {
         await stopping.value
 
         #expect(harness.room("!a").stopLiveLocationShareCallsCount == 2)
+    }
+
+    @Test
+    func aRestoredShareDoesNotWaitToRetryAStop() async throws {
+        let harness = Harness()
+        harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
+        harness.liveLocations("!a").send([.own(beaconID: "$beacon-!a", endDate: harness.date(600))])
+        await harness.service.restore()
+        harness.room("!a").stopLiveLocationShareReturnValue = .failure(.beaconNotReady)
+
+        // Already synced, so there's no confirmation to wait for: both attempts go straight out.
+        let stopping = Task { await harness.service.stop() }
+        try await waitUntil { harness.room("!a").stopLiveLocationShareCallsCount == 2 }
+        #expect(harness.clock.deadlines.isEmpty)
+        harness.clock.advance(by: .seconds(30))
+        await stopping.value
+
+        #expect(harness.service.state == .idle)
+    }
+
+    @Test
+    func stopAwaitsAnInFlightRetriedStop() async throws {
+        let harness = Harness()
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.room("!a").stopLiveLocationShareReturnValue = .failure(.beaconNotReady)
+        let gate = AsyncGate()
+        let firstStop = Task { await harness.service.stop() }
+        try await waitUntil { harness.clock.deadlines == [.seconds(30)] }
+        harness.room("!a").stopLiveLocationShareClosure = {
+            await gate.wait()
+            return .success(())
+        }
+        harness.confirm("!a")
+        try await waitUntil { harness.room("!a").stopLiveLocationShareCallsCount == 2 }
+
+        // E.g. signing out: must not reach logout while the retried stop is still in flight.
+        var isStopped = false
+        let secondStop = Task {
+            await harness.service.stop()
+            isStopped = true
+        }
+        await runQueuedMainActorWork()
+        #expect(isStopped == false)
+
+        await gate.open()
+        await secondStop.value
+        await firstStop.value
+        #expect(isStopped)
     }
 
     @Test

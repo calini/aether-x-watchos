@@ -257,7 +257,8 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             switch await share.roomProxy.stopLiveLocationShare() {
             case .success:
                 return
-            case .failure(.beaconNotReady) where !liveEventIDs.contains(share.eventID):
+            // `isConfirmed` stops changing once the share has ended, so a confirmation since then is checked too.
+            case .failure(.beaconNotReady) where !share.isConfirmed && !liveEventIDs.contains(share.eventID):
                 MXLog.info("The live location share in \(share.roomID) isn't synced yet, stopping it once it is")
                 retryStopOnceLive(share)
                 return
@@ -273,16 +274,17 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         pendingStops[share.eventID] = pendingStop
         pendingStop.task = Task { [weak self] in
             let isLive = await self?.waitUntilLive(share.eventID, for: pendingStop) ?? false
+            if isLive, !pendingStop.isDropped {
+                switch await share.roomProxy.stopLiveLocationShare() {
+                case .success: MXLog.info("Stopped the live location share in \(share.roomID) once it synced")
+                case .failure: MXLog.error("Retrying the stop of the live location share in \(share.roomID) failed")
+                }
+            } else {
+                MXLog.info("Not retrying the stop of the live location share in \(share.roomID)")
+            }
+            // Only now, so `stop()` (e.g. before logging out) also waits for a retry in flight.
             if self?.pendingStops[share.eventID] === pendingStop {
                 self?.pendingStops[share.eventID] = nil
-            }
-            guard isLive, !pendingStop.isDropped else {
-                MXLog.info("Not retrying the stop of the live location share in \(share.roomID)")
-                return
-            }
-            switch await share.roomProxy.stopLiveLocationShare() {
-            case .success: MXLog.info("Stopped the live location share in \(share.roomID) once it synced")
-            case .failure: MXLog.error("Retrying the stop of the live location share in \(share.roomID) failed")
             }
         }
     }
@@ -463,8 +465,8 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             share.lastAttemptFailed = false
             share.consecutiveFailures = 0
             MXLog.info("Live location update sent (#\(share.sentCount))")
-        case .failure(.beaconNotReady) where !share.isConfirmed:
-            // Expected until sync delivers the share, so it doesn't count towards pausing.
+        case .failure(.beaconNotReady) where !share.isConfirmed && now() < share.confirmationDeadline:
+            // Expected until sync delivers the share; past the deadline it means sync didn't, so it counts.
             share.lastAttemptFailed = true
             MXLog.info("The live location share isn't synced yet, retrying the update")
         case .failure:
