@@ -31,6 +31,8 @@ final class TimelineProxy: TimelineProxyProtocol {
 
     private let timeline: Timeline
     private let ownUserID: String
+    /// Any send error disables the room's send queue, and `SendHandle.tryResend` only unwedges the item.
+    private let enableSendQueue: () -> Void
     private let itemsSubject = CurrentValueSubject<[TimelineItem], Never>([])
     private var items: [TimelineItem] = []
     /// Mirrors `items` 1:1 with the raw SDK items, so a `SendHandle` can be looked up for `retrySend`.
@@ -41,9 +43,10 @@ final class TimelineProxy: TimelineProxyProtocol {
         itemsSubject.eraseToAnyPublisher()
     }
 
-    init(timeline: Timeline, ownUserID: String) {
+    init(timeline: Timeline, ownUserID: String, enableSendQueue: @escaping () -> Void) {
         self.timeline = timeline
         self.ownUserID = ownUserID
+        self.enableSendQueue = enableSendQueue
     }
 
     deinit {
@@ -104,13 +107,7 @@ final class TimelineProxy: TimelineProxyProtocol {
             MXLog.error("No send handle for \(itemID)")
             return .failure(.sdkError("Message no longer available"))
         }
-        do {
-            try await sendHandle.tryResend()
-            return .success(())
-        } catch {
-            MXLog.error("Retrying a send failed: \(error)")
-            return .failure(.sdkError(error.localizedDescription))
-        }
+        return await Self.resend(sendHandle, enablingSendQueueWith: enableSendQueue)
     }
 
     func markAsRead() async {
@@ -118,6 +115,18 @@ final class TimelineProxy: TimelineProxyProtocol {
             try await timeline.markAsRead(receiptType: .read)
         } catch {
             MXLog.error("Marking as read failed: \(error)")
+        }
+    }
+
+    /// Re-enables the room's send queue before unwedging, otherwise the retried echo stays "Sending…" forever.
+    static func resend(_ sendHandle: SendHandleProtocol, enablingSendQueueWith enableSendQueue: () -> Void) async -> Result<Void, TimelineProxyError> {
+        enableSendQueue()
+        do {
+            try await sendHandle.tryResend()
+            return .success(())
+        } catch {
+            MXLog.error("Retrying a send failed: \(error)")
+            return .failure(.sdkError(error.localizedDescription))
         }
     }
 

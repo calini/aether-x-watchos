@@ -90,6 +90,10 @@ nonisolated extension SDKListener: GeneratedQrLoginProgressListener where T == G
     func onUpdate(state: GeneratedQrLoginProgress) { onUpdateClosure(state) }
 }
 
+nonisolated extension SDKListener: SendQueueRoomErrorListener where T == (String, ClientError) {
+    func onError(roomId: String, error: ClientError) { onUpdateClosure((roomId, error)) }
+}
+
 nonisolated extension SDKListener: VerificationStateListener where T == VerificationState {
     func onUpdate(status: VerificationState) { onUpdateClosure(status) }
 }

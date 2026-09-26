@@ -17,8 +17,11 @@ final class ClientProxy: ClientProxyProtocol {
     private let syncStateSubject = CurrentValueSubject<SyncState, Never>(.idle)
     private let verificationStateSubject = CurrentValueSubject<SessionVerification, Never>(.unknown)
     private let actionsSubject = PassthroughSubject<ClientProxyAction, Never>()
+    private let sendQueueErrorSubject = PassthroughSubject<Void, Never>()
 
+    private var cancellables = Set<AnyCancellable>()
     private var syncStateHandle: TaskHandle?
+    private var sendQueueStatusHandle: TaskHandle?
     private var verificationStateHandle: TaskHandle?
     private var delegateHandle: TaskHandle?
 
@@ -49,6 +52,12 @@ final class ClientProxy: ClientProxyProtocol {
             self?.verificationStateSubject.send(SessionVerification(state))
         })
 
+        sendQueueStatusHandle = client.subscribeToSendQueueStatus(listener: SDKListener<(String, ClientError)>.onMainActor { [weak self] roomID, _ in
+            MXLog.error("Send queue disabled after an error in \(roomID)")
+            self?.sendQueueErrorSubject.send(())
+        })
+        observeSendQueues()
+
         delegateHandle = try client.setDelegate(delegate: ClientDelegateForwarder { [weak self] isSoftLogout in
             MXLog.error("Received an auth error (soft logout: \(isSoftLogout))")
             self?.actionsSubject.send(.authError(isSoftLogout: isSoftLogout))
@@ -57,6 +66,7 @@ final class ClientProxy: ClientProxyProtocol {
 
     deinit {
         syncStateHandle?.cancel()
+        sendQueueStatusHandle?.cancel()
         verificationStateHandle?.cancel()
         delegateHandle?.cancel()
     }
@@ -69,6 +79,7 @@ final class ClientProxy: ClientProxyProtocol {
     func startSync() async {
         MXLog.info("Starting sync")
         await syncService.start()
+        // Normally already started with the session; retries a start that failed then.
         await roomSummaryProvider.start()
     }
 
@@ -97,7 +108,9 @@ final class ClientProxy: ClientProxyProtocol {
             try await roomListService.setRoomSubscriptions(roomIds: [roomID])
             let room = try roomListService.room(roomId: roomID)
             let timeline = try await room.timeline()
-            return TimelineProxy(timeline: timeline, ownUserID: userID)
+            return TimelineProxy(timeline: timeline, ownUserID: userID) {
+                room.enableSendQueue(enable: true)
+            }
         } catch {
             MXLog.error("Failed opening the timeline for \(roomID): \(error)")
             return nil
@@ -111,6 +124,22 @@ final class ClientProxy: ClientProxyProtocol {
         } catch {
             MXLog.error("Logout request failed, clearing the session anyway: \(error)")
         }
+    }
+
+    /// Any send error disables that room's send queue until it's re-enabled (mirrors iOS): on every
+    /// return to `.running`, and after an error that happened while running (debounced).
+    private func observeSendQueues() {
+        let running = syncStateSubject.removeDuplicates().filter { $0 == .running }.map { _ in () }
+        let errorsWhileRunning = sendQueueErrorSubject
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .filter { [weak self] in self?.syncStateSubject.value == .running }
+
+        running.merge(with: errorsWhileRunning)
+            .sink { [client] in
+                MXLog.info("Enabling all send queues")
+                Task { await client.enableAllSendQueues(enable: true) }
+            }
+            .store(in: &cancellables)
     }
 }
 
