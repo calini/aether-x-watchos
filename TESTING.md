@@ -2,10 +2,12 @@
 
 ## How to install
 
-1. Open `ElementXWatch.xcodeproj` in Xcode.
-2. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM` (Xcode → Settings → Accounts → your Apple ID → Team ID).
-3. Select the watch as the run destination and Run.
-4. On the iPhone, in Element X: tap the version number in Settings 7 times, then turn on **Developer options → Link new device**.
+1. Build the SDK for devices with the full `Tools/build-sdk.sh` (not `--dev`, which is simulator only; ~12 minutes), then run `xcodegen`.
+2. Open `ElementXWatch.xcodeproj` in Xcode.
+3. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM` (Xcode → Settings → Accounts → your Apple ID → Team ID).
+4. Keep the scheme's Run action on the **Debug** configuration: the transport audit's tripwire proxy (`127.0.0.1:9`) only exists in Debug builds.
+5. Select the watch as the run destination and Run.
+6. On the iPhone, in Element X: tap the version number in Settings 7 times, then turn on **Developer options → Link new device**.
 
 Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork: `744352d11` · App: `28c590b`
 
@@ -32,6 +34,7 @@ Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork:
 | 6 | Wrist down, receive messages, wrist up: caught up within seconds | | |
 | 7 | Sign out clears the session and returns to QR login | | |
 | 8 | Release build including arm64_32 succeeds | | |
+| 9 | Open a chat, go back, open it again quickly: no duplicate timeline or stuck loading (stray chat coordinator check) | | |
 
 ## Transport audit
 
