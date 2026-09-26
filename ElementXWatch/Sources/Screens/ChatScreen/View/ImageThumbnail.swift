@@ -39,9 +39,11 @@ struct ImageThumbnail: View {
         }
         .fullScreenCover(isPresented: $isShowingFullScreen) {
             if let uiImage {
-                Image(uiImage: uiImage).resizable().scaledToFit().ignoresSafeArea()
+                ImageViewer(image: uiImage, caption: image.caption) { [mediaLoader, source = image.source] in
+                    await mediaLoader.loadThumbnail(source, 1000, 1000).flatMap(UIImage.init(data:))
+                }
             }
         }
-        .accessibilityLabel(image.caption ?? WatchStrings.photo)
+        .accessibilityLabel(image.caption ?? WatchStrings.photoAccessibilityLabel)
     }
 }

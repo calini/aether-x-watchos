@@ -15,6 +15,7 @@ nonisolated enum WatchStrings {
     static let messageDeleted = "Message deleted"
     static let waitingForMessage = "Waiting for this message"
     static let photo = "📷 Photo"
+    static let photoAccessibilityLabel = "Photo"
     static let video = "🎥 Video"
     static let audio = "🎵 Audio"
     static let file = "📎 File"
