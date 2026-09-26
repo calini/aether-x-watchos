@@ -134,6 +134,32 @@ struct LocationSharingScreenViewModelTests {
     }
 
     @Test
+    func tappingAgainAfterSendingDoesNotSendTwice() async throws {
+        let harness = try await Harness.located()
+        let gate = AsyncGate()
+        var sendCount = 0
+        harness.sendLocation = { _ in
+            sendCount += 1
+            await gate.wait()
+            return .success(())
+        }
+
+        harness.send(.sendCurrent)
+        harness.send(.sendCurrent)
+        await gate.open()
+        try await waitUntil { harness.actions == [.done] }
+        // The sheet is still closing: its buttons must stay disabled.
+        harness.send(.sendCurrent)
+        harness.send(.shareLive(.fifteenMinutes))
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(sendCount == 1)
+        #expect(harness.viewState.isBusy)
+        #expect(!harness.liveLocationService.startRoomIDDurationCalled)
+        #expect(harness.actions == [.done])
+    }
+
+    @Test
     func sendFailureShowsError() async throws {
         let harness = try await Harness.located()
         harness.sendLocation = { _ in .failure(.sdkError("boom")) }
@@ -165,6 +191,29 @@ struct LocationSharingScreenViewModelTests {
         try await waitUntil { harness.actions == [.done] }
         #expect(harness.liveLocationService.startRoomIDDurationReceivedArguments?.roomID == Harness.roomID)
         #expect(harness.liveLocationService.startRoomIDDurationReceivedArguments?.duration == .seconds(3600))
+    }
+
+    @Test
+    func tappingAgainAfterStartingDoesNotStartTwice() async throws {
+        let harness = try await Harness.located()
+        let gate = AsyncGate()
+        harness.liveLocationService.startRoomIDDurationClosure = { _, _ in
+            await gate.wait()
+            return .success(())
+        }
+
+        harness.send(.shareLive(.fifteenMinutes))
+        harness.send(.shareLive(.oneHour))
+        await gate.open()
+        try await waitUntil { harness.actions == [.done] }
+        // The sheet is still closing: its buttons must stay disabled.
+        harness.send(.shareLive(.oneHour))
+        harness.send(.sendCurrent)
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(harness.liveLocationService.startRoomIDDurationCallsCount == 1)
+        #expect(harness.viewState.isBusy)
+        #expect(harness.actions == [.done])
     }
 
     @Test

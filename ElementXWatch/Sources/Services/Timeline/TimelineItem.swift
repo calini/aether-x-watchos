@@ -77,6 +77,8 @@ struct LiveLocationBody: Equatable {
     /// `nil` when no location update has arrived yet or the last one couldn't be parsed.
     let lastGeoURI: GeoURI?
     let lastUpdate: Date?
+    /// When the share stops being live if no stop event arrives: its start plus its timeout.
+    let endDate: Date
     let senderID: String
 }
 

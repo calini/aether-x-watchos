@@ -40,7 +40,7 @@ struct LocationMapScreenViewModelTests {
     func liveModeFollowsThatUsersUpdates() async throws {
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: pub),
                                                                          .fixture(userID: "@alice:x", beaconID: "$beacon", geoURI: park)])
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil, endDate: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
 
         try await waitUntil { viewModel.context.viewState.geoURI == pub }
         #expect(viewModel.context.viewState.isLive)
@@ -55,7 +55,7 @@ struct LocationMapScreenViewModelTests {
     @Test
     func liveModeEndsWhenTheUsersShareLeaves() async throws {
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: pub)])
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil, endDate: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
         try await waitUntil { viewModel.context.viewState.geoURI == pub }
 
         shares.send([.fixture(userID: "@alice:x", beaconID: "$beacon", geoURI: park)])
@@ -67,7 +67,7 @@ struct LocationMapScreenViewModelTests {
     @Test
     func liveModeStartsFromTheBubblesPositionAndIgnoresTheListBeforeItsFirstUpdate() async throws {
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([])
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: pub), liveLocationsPublisher: shares.eraseToAnyPublisher(),
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: pub, endDate: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(),
                                                    openInMaps: { _, _ in })
         for _ in 0..<10 { await Task.yield() }
 
@@ -82,7 +82,7 @@ struct LocationMapScreenViewModelTests {
     @Test
     func liveModeWithoutUpdatesShowsTheBubblesPosition() {
         var opened: [GeoURI] = []
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: pub), liveLocationsPublisher: nil,
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: pub, endDate: nil), liveLocationsPublisher: nil,
                                                    openInMaps: { geoURI, _ in opened.append(geoURI) })
 
         viewModel.context.send(viewAction: .openInMaps)
@@ -94,9 +94,42 @@ struct LocationMapScreenViewModelTests {
 
     @Test
     func liveModeWithNothingToShowIsEndedRatherThanLoading() {
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: nil, openInMaps: { _, _ in })
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil, endDate: nil), liveLocationsPublisher: nil, openInMaps: { _, _ in })
 
         #expect(viewModel.context.viewState.geoURI == nil)
+        #expect(viewModel.context.viewState.hasEnded)
+    }
+
+    @Test
+    func liveModeEndsOnceTheSharesEndTimePasses() async throws {
+        let clock = ExpiryClock()
+        let share = LiveLocationSummary(userID: "@bob:x", beaconID: "$beacon", startDate: clock.now, endDate: clock.now.addingTimeInterval(900),
+                                        lastGeoURI: pub, lastUpdate: clock.now)
+        let shares = CurrentValueSubject<[LiveLocationSummary], Never>([share])
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil, endDate: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(),
+                                                   openInMaps: { _, _ in }, now: { clock.now }, ticks: clock.ticks)
+        try await waitUntil { viewModel.context.viewState.geoURI == pub }
+        #expect(!viewModel.context.viewState.hasEnded)
+
+        // The sender's device died: the share is never stopped, but its end time passes.
+        clock.now = share.endDate
+        clock.tick()
+
+        #expect(viewModel.context.viewState.hasEnded)
+        #expect(viewModel.context.viewState.geoURI == pub)
+    }
+
+    @Test
+    func liveModeWithoutUpdatesEndsAtTheBubblesEndTime() {
+        let clock = ExpiryClock()
+        let endDate = clock.now.addingTimeInterval(60)
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: pub, endDate: endDate), liveLocationsPublisher: nil,
+                                                   openInMaps: { _, _ in }, now: { clock.now }, ticks: clock.ticks)
+        #expect(!viewModel.context.viewState.hasEnded)
+
+        clock.now = endDate
+        clock.tick()
+
         #expect(viewModel.context.viewState.hasEnded)
     }
 
@@ -104,7 +137,7 @@ struct LocationMapScreenViewModelTests {
     func openInMapsUsesTheCurrentCoordinate() async throws {
         var opened: [(GeoURI, String?)] = []
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: pub)])
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(),
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil, endDate: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(),
                                                    openInMaps: { opened.append(($0, $1)) })
         shares.send([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: park)])
         try await waitUntil { viewModel.context.viewState.geoURI == park }

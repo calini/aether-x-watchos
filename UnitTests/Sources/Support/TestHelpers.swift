@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Combine
 import Foundation
 import Testing
 
@@ -32,4 +33,18 @@ func waitUntil(_ condition: @MainActor () -> Bool) async throws {
         try await Task.sleep(for: .milliseconds(10))
     }
     Issue.record("Condition not met in time")
+}
+
+/// A settable `now` and a manual tick, for view models that re-evaluate live shares' expiry over time.
+final class ExpiryClock {
+    var now = Date(timeIntervalSince1970: 1_700_000_000)
+    private let subject = PassthroughSubject<Void, Never>()
+
+    var ticks: AnyPublisher<Void, Never> {
+        subject.eraseToAnyPublisher()
+    }
+
+    func tick() {
+        subject.send()
+    }
 }

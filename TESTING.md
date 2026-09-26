@@ -39,6 +39,19 @@ Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork:
 | 11 | Open a chat, go back, open it again quickly: no duplicate timeline or stuck loading (stray chat coordinator check) | | |
 | 12 | *(Optional — N/A if no QR server is available.)* A server that supports QR sign-in still offers and completes QR sign-in on the chosen server. Also: start QR, go back, choose Password — password sign-in works. | | |
 
+## Location sharing (spec §8)
+
+Location permission: the first share asks for "when in use" access; a live share also needs background location, which keeps updates flowing with the wrist down. If access was declined, turn it on in Settings → Privacy & Security → Location Services.
+
+| # | Check | Result | Notes |
+|---|---|---|---|
+| L1 | (+) → Location → **Send current location**: the location shows in Element X on the iPhone. | | |
+| L2 | **Share live · 15 min**, then walk around with the wrist down: updates arrive on the iPhone. The chat shows the pill "📍 Sharing live · N min left", counting down every minute. | | |
+| L3 | Tap **Stop** (on the pill, or on your own live bubble): the share ends everywhere and the pill disappears. | | |
+| L4 | Start a live share on the iPhone: the watch shows it, and the full-screen map follows it. | | |
+| L5 | A share whose sender never stops it (e.g. phone switched off) reads "Live location ended" once its time runs out, in the bubble and on the full-screen map. | | |
+| L6 | Battery use over a 1-hour share (note start and end %). | | |
+
 ## Transport audit
 
 - [ ] Console (Xcode → Devices → Open Console, filter `io.ilie.elementx.watch`) shows no `127.0.0.1:9` / proxy connection errors during the session.

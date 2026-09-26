@@ -31,8 +31,9 @@ final class ChatScreenCoordinator: CoordinatorProtocol {
 
     init(parameters: ChatScreenCoordinatorParameters) {
         self.parameters = parameters
-        viewModel = ChatScreenViewModel(roomName: parameters.roomName, isDirect: parameters.isDirect,
-                                        timelineProxy: parameters.timelineProxy, roomLocationProxy: parameters.roomLocationProxy)
+        viewModel = ChatScreenViewModel(roomID: parameters.roomID, roomName: parameters.roomName, isDirect: parameters.isDirect,
+                                        timelineProxy: parameters.timelineProxy, roomLocationProxy: parameters.roomLocationProxy,
+                                        liveLocationService: parameters.locationServices.liveLocationService)
     }
 
     func toPresentable() -> AnyView {

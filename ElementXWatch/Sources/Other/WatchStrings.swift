@@ -119,9 +119,16 @@ nonisolated enum WatchStrings {
     static let startLiveFailed = "Couldn't start live location."
     static let shareHere = "Share here"
     static let anotherChat = "another chat"
+    static let stop = "Stop"
+    static let liveLocationPaused = "Live location paused, retrying…"
 
     static func replaceLiveShareTitle(roomName: String) -> String {
         "Stop sharing in \(roomName) and share here instead?"
+    }
+
+    /// "📍 Sharing live · 12 min left"
+    static func sharingLive(minutesLeft: Int) -> String {
+        "📍 Sharing live · \(minutesLeft) min left"
     }
 
     /// "Live · updated 30 s ago", rounded down to seconds, minutes or hours.

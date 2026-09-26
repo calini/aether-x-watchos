@@ -13,9 +13,19 @@ typealias LocationMapScreenViewModelType = StateStoreViewModelV2<LocationMapScre
 final class LocationMapScreenViewModel: LocationMapScreenViewModelType, LocationMapScreenViewModelProtocol {
     private let description: String?
     private let openInMaps: (GeoURI, String?) -> Void
+    private let now: () -> Date
+    /// The share left the room's list, or there was never anything to follow.
+    private var isShareGone = false
+    private var endDate: Date?
 
-    init(mode: LocationMapScreenMode, liveLocationsPublisher: AnyPublisher<[LiveLocationSummary], Never>?, openInMaps: @escaping (GeoURI, String?) -> Void) {
+    /// - Parameter ticks: Re-evaluates a live share's expiry; `now` gives the time at each tick.
+    init(mode: LocationMapScreenMode,
+         liveLocationsPublisher: AnyPublisher<[LiveLocationSummary], Never>?,
+         openInMaps: @escaping (GeoURI, String?) -> Void,
+         now: @escaping () -> Date = Date.init,
+         ticks: AnyPublisher<Void, Never> = LiveLocationExpiry.ticks) {
         self.openInMaps = openInMaps
+        self.now = now
 
         switch mode {
         case .location(let geoURI, let description):
@@ -23,11 +33,13 @@ final class LocationMapScreenViewModel: LocationMapScreenViewModelType, Location
             self.description = description
             super.init(initialViewState: LocationMapScreenViewState(geoURI: geoURI, title: description ?? WatchStrings.location,
                                                                     isLive: false, hasEnded: false))
-        case .live(let userID, let initial):
+        case .live(let userID, let initial, let endDate):
             description = nil
+            self.endDate = endDate
             // Without updates or a position there is nothing to wait for, so it shows as ended rather than loading forever.
-            let hasEnded = liveLocationsPublisher == nil && initial == nil
-            super.init(initialViewState: LocationMapScreenViewState(geoURI: initial, title: WatchStrings.liveLocation, isLive: true, hasEnded: hasEnded))
+            isShareGone = liveLocationsPublisher == nil && initial == nil
+            super.init(initialViewState: LocationMapScreenViewState(geoURI: initial, title: WatchStrings.liveLocation, isLive: true, hasEnded: false))
+            refreshHasEnded()
 
             liveLocationsPublisher?
                 // The room's list starts empty before its first update, which would read as ended.
@@ -35,6 +47,10 @@ final class LocationMapScreenViewModel: LocationMapScreenViewModelType, Location
                 .map { summaries in summaries.first { $0.userID == userID } }
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] summary in self?.update(summary) }
+                .store(in: &cancellables)
+
+            ticks
+                .sink { [weak self] in self?.refreshHasEnded() }
                 .store(in: &cancellables)
         }
     }
@@ -48,9 +64,18 @@ final class LocationMapScreenViewModel: LocationMapScreenViewModelType, Location
     }
 
     private func update(_ summary: LiveLocationSummary?) {
-        state.hasEnded = summary == nil
+        isShareGone = summary == nil
+        if let summary {
+            endDate = summary.endDate
+        }
         if let geoURI = summary?.lastGeoURI {
             state.geoURI = geoURI
         }
+        refreshHasEnded()
+    }
+
+    private func refreshHasEnded() {
+        let hasExpired = endDate.map { now() >= $0 } ?? false
+        state.hasEnded = isShareGone || hasExpired
     }
 }

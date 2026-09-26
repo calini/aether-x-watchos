@@ -15,6 +15,8 @@ struct MessageBubble: View {
     let onLongPress: () -> Void
     let onRetry: () -> Void
     let onShowLocation: () -> Void
+    /// Set on the user's own running live share, to offer Stop.
+    var onStopLiveLocation: (() -> Void)?
 
     var body: some View {
         VStack(alignment: item.isOwn ? .trailing : .leading, spacing: 2) {
@@ -63,7 +65,7 @@ struct MessageBubble: View {
             LocationBubble(content: .location(location), onTap: onShowLocation)
         case .liveLocation:
             if let liveLocation {
-                LocationBubble(content: .live(liveLocation), onTap: onShowLocation)
+                LocationBubble(content: .live(liveLocation), onTap: onShowLocation, onStop: onStopLiveLocation)
             }
         case .redacted:
             Text(WatchStrings.messageDeleted).italic().foregroundStyle(Color.compound.textSecondary)

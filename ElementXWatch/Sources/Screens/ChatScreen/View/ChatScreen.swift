@@ -26,6 +26,11 @@ struct ChatScreen: View {
             }
         }
         .defaultScrollAnchor(.bottom)
+        .safeAreaInset(edge: .top) {
+            if let liveShare = context.viewState.liveShare {
+                LiveLocationPill(banner: liveShare) { context.send(viewAction: .stopLiveLocation) }
+            }
+        }
         .navigationTitle(context.viewState.roomName)
         .onAppear { context.send(viewAction: .appear) }
         .sheet(item: $context.actionsItem) { item in
@@ -58,7 +63,8 @@ struct ChatScreen: View {
                           liveLocation: context.viewState.liveLocation(for: event),
                           onLongPress: { context.send(viewAction: .showActions(event)) },
                           onRetry: { context.send(viewAction: .retry(event)) },
-                          onShowLocation: { context.send(viewAction: .showLocation(event)) })
+                          onShowLocation: { context.send(viewAction: .showLocation(event)) },
+                          onStopLiveLocation: context.viewState.canStopLiveLocation(from: event) ? { context.send(viewAction: .stopLiveLocation) } : nil)
         case .dateDivider(let date):
             Text(date, format: .dateTime.weekday().day().month())
                 .font(.caption2)
@@ -154,6 +160,7 @@ private struct RoundGlassButtonStyle: ButtonStyle {
 // MARK: - Previews
 
 struct ChatScreen_Previews: PreviewProvider {
+    static let roomID = "!room:x"
     static let items: [TimelineItem] = [
         TimelineItem(id: "d", kind: .dateDivider(.now)),
         makeItem("1", "Are we still on for **Saturday**?", own: false, reactions: [.init(key: "👍", count: 2, isHighlighted: true)]),
@@ -178,7 +185,8 @@ struct ChatScreen_Previews: PreviewProvider {
             try? await Task.sleep(for: .seconds(999))
             return .success(false)
         }
-        let viewModel = ChatScreenViewModel(roomName: "Bob", isDirect: true, timelineProxy: proxy, roomLocationProxy: nil)
+        let viewModel = ChatScreenViewModel(roomID: roomID, roomName: "Bob", isDirect: true, timelineProxy: proxy, roomLocationProxy: nil,
+                                            liveLocationService: makeLiveLocationService(.idle))
         viewModel.state.items = items
         viewModel.state.reachedStart = false
         return viewModel
@@ -208,9 +216,23 @@ struct ChatScreen_Previews: PreviewProvider {
         return makeViewModel(isDirect: false, items: [
             makeItem("6", "", own: false, body: .location(LocationBody(geoURI: geoURI, description: "Trafalgar Square", body: ""))),
             makeItem("7", "", own: false, body: .liveLocation(LiveLocationBody(isLive: true, lastGeoURI: geoURI, lastUpdate: .now.addingTimeInterval(-30),
-                                                                              senderID: "@bob:x"))),
-            makeItem("8", "", own: true, body: .liveLocation(LiveLocationBody(isLive: false, lastGeoURI: geoURI, lastUpdate: .now, senderID: "@me:x")))
+                                                                              endDate: .now.addingTimeInterval(600), senderID: "@bob:x"))),
+            makeItem("8", "", own: true, body: .liveLocation(LiveLocationBody(isLive: false, lastGeoURI: geoURI, lastUpdate: .now,
+                                                                             endDate: .now, senderID: "@me:x")))
         ])
+    }
+
+    static func sharingLive(isPaused: Bool) -> ChatScreenViewModel {
+        let geoURI = GeoURI(latitude: 51.5072, longitude: -0.1276, uncertainty: nil)
+        let endsAt = Date.now.addingTimeInterval(12 * 60)
+        let liveState = LiveLocationState.sharing(roomID: roomID, endsAt: endsAt, isPaused: isPaused)
+        let viewModel = makeViewModel(isDirect: false, liveState: liveState, items: [
+            makeItem("9", "Heading over now", own: false),
+            makeItem("10", "", own: true, body: .liveLocation(LiveLocationBody(isLive: true, lastGeoURI: geoURI, lastUpdate: .now,
+                                                                              endDate: endsAt, senderID: "@me:x")))
+        ])
+        viewModel.state.liveShare = LiveShareBanner(endsAt: endsAt, isPaused: isPaused)
+        return viewModel
     }
 
     static var previews: some View {
@@ -231,6 +253,12 @@ struct ChatScreen_Previews: PreviewProvider {
         screen(locations)
             .environment(\.mapSnapshotLoader, MapSnapshotLoader())
             .previewDisplayName("Locations")
+        screen(sharingLive(isPaused: false))
+            .environment(\.mapSnapshotLoader, MapSnapshotLoader())
+            .previewDisplayName("Sharing live")
+        screen(sharingLive(isPaused: true))
+            .environment(\.mapSnapshotLoader, MapSnapshotLoader())
+            .previewDisplayName("Sharing live, paused")
     }
 
     static func screen(_ viewModel: ChatScreenViewModel) -> some View {
@@ -245,14 +273,22 @@ struct ChatScreen_Previews: PreviewProvider {
                                                      replyTo: nil, reactions: reactions, isEdited: false, sendState: sendState, canBeRepliedTo: true)))
     }
 
-    static func makeViewModel(isDirect: Bool, items: [TimelineItem] = items) -> ChatScreenViewModel {
+    static func makeViewModel(isDirect: Bool, liveState: LiveLocationState = .idle, items: [TimelineItem] = items) -> ChatScreenViewModel {
         let proxy = TimelineProxyMock()
         proxy.itemsPublisher = Just(items).eraseToAnyPublisher()
         // Safe default in case a preview's spinner drives a real `.paginateBackwards` via `.task`.
         proxy.paginateBackwardsReturnValue = .success(false)
-        let viewModel = ChatScreenViewModel(roomName: isDirect ? "Bob" : "Climbing crew", isDirect: isDirect, timelineProxy: proxy, roomLocationProxy: nil)
+        let viewModel = ChatScreenViewModel(roomID: roomID, roomName: isDirect ? "Bob" : "Climbing crew", isDirect: isDirect, timelineProxy: proxy,
+                                            roomLocationProxy: nil, liveLocationService: makeLiveLocationService(liveState))
         viewModel.state.items = items
         viewModel.state.reachedStart = true
         return viewModel
+    }
+
+    static func makeLiveLocationService(_ state: LiveLocationState) -> LiveLocationServiceMock {
+        let service = LiveLocationServiceMock()
+        service.state = state
+        service.statePublisher = Just(state).eraseToAnyPublisher()
+        return service
     }
 }

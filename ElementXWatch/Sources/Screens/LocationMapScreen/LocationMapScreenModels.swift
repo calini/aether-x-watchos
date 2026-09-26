@@ -5,10 +5,13 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Foundation
+
 enum LocationMapScreenMode: Equatable {
     case location(GeoURI, description: String?)
     /// Follows the user's live share in the room, starting from the position the bubble already has.
-    case live(userID: String, initial: GeoURI?)
+    /// `endDate` ends it on time if no update or stop arrives, e.g. when the sender's device died.
+    case live(userID: String, initial: GeoURI?, endDate: Date?)
 }
 
 struct LocationMapScreenViewState: BindableState {

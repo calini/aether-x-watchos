@@ -12,12 +12,24 @@ typealias ChatScreenViewModelType = StateStoreViewModelV2<ChatScreenViewState, C
 
 final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelProtocol {
     private let timelineProxy: TimelineProxyProtocol
+    private let liveLocationService: LiveLocationServiceProtocol
+    private let now: () -> Date
     private var hasAppeared = false
     private var lastReadItemID: String?
 
-    init(roomName: String, isDirect: Bool, timelineProxy: TimelineProxyProtocol, roomLocationProxy: RoomLocationProxyProtocol?) {
+    /// - Parameter ticks: Re-evaluates live shares' expiry; `now` gives the time at each tick.
+    init(roomID: String,
+         roomName: String,
+         isDirect: Bool,
+         timelineProxy: TimelineProxyProtocol,
+         roomLocationProxy: RoomLocationProxyProtocol?,
+         liveLocationService: LiveLocationServiceProtocol,
+         now: @escaping () -> Date = Date.init,
+         ticks: AnyPublisher<Void, Never> = LiveLocationExpiry.ticks) {
         self.timelineProxy = timelineProxy
-        super.init(initialViewState: ChatScreenViewState(roomName: roomName, showsSenderNames: !isDirect))
+        self.liveLocationService = liveLocationService
+        self.now = now
+        super.init(initialViewState: ChatScreenViewState(roomName: roomName, showsSenderNames: !isDirect, now: now()))
 
         timelineProxy.itemsPublisher
             .receive(on: DispatchQueue.main)
@@ -29,7 +41,21 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             // list would end every live bubble; until then the bubbles trust their events.
             .drop { $0.isEmpty }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] liveLocations in self?.state.liveLocations = liveLocations }
+            .sink { [weak self] liveLocations in self?.update(liveLocations) }
+            .store(in: &cancellables)
+
+        liveLocationService.statePublisher
+            .map { liveState in
+                guard case .sharing(roomID, let endsAt, let isPaused) = liveState else { return nil }
+                return LiveShareBanner(endsAt: endsAt, isPaused: isPaused)
+            }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] banner in self?.state.liveShare = banner }
+            .store(in: &cancellables)
+
+        ticks
+            .sink { [weak self] in self?.refreshNow() }
             .store(in: &cancellables)
     }
 
@@ -64,6 +90,8 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             state.bindings.errorMessage = nil
         case .dismissError:
             state.bindings.errorMessage = nil
+        case .stopLiveLocation:
+            Task { await liveLocationService.stop() }
         }
     }
 
@@ -82,6 +110,7 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
     }
 
     private func update(_ items: [TimelineItem]) {
+        refreshNow()
         state.items = items.filter(\.isVisible)
 
         // Keep the read receipt current while the chat is open.
@@ -91,7 +120,17 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         }
     }
 
+    private func update(_ liveLocations: [LiveLocationSummary]) {
+        refreshNow()
+        state.liveLocations = liveLocations
+    }
+
+    private func refreshNow() {
+        state.now = now()
+    }
+
     private func showLocation(_ item: EventItem) {
+        refreshNow()
         guard let mode = locationMapMode(for: item) else { return }
         state.bindings.locationMap = LocationMapPresentation(mode: mode)
     }
@@ -104,7 +143,7 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         case .liveLocation(let body):
             guard let liveLocation = state.liveLocation(for: item) else { return nil }
             if liveLocation.isLive {
-                return .live(userID: body.senderID, initial: liveLocation.geoURI)
+                return .live(userID: body.senderID, initial: liveLocation.geoURI, endDate: liveLocation.endDate)
             }
             return liveLocation.geoURI.map { .location($0, description: nil) }
         default:

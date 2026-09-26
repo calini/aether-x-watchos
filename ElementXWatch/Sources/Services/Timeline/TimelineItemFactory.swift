@@ -80,7 +80,14 @@ enum TimelineItemFactory {
         return LiveLocationBody(isLive: content.isLive,
                                  lastGeoURI: lastLocation.flatMap { GeoURI(string: $0.geoUri) },
                                  lastUpdate: lastLocation.map { Date(timeIntervalSince1970: TimeInterval($0.ts) / 1000) },
+                                 endDate: liveLocationEndDate(of: content),
                                  senderID: senderID)
+    }
+
+    /// Saturates: the timeout comes from other people's events, and an overflowing `+` would trap.
+    private static func liveLocationEndDate(of content: LiveLocationContent) -> Date {
+        let (end, didOverflow) = content.ts.addingReportingOverflow(content.timeoutMs)
+        return didOverflow ? .distantFuture : Date(timeIntervalSince1970: TimeInterval(end) / 1000)
     }
 
     static func isEdited(_ content: TimelineItemContent) -> Bool {

@@ -35,6 +35,7 @@ struct TimelineItemFactoryLocationTests {
         #expect(body == LiveLocationBody(isLive: true,
                                           lastGeoURI: GeoURI(latitude: 51.6, longitude: -0.13, uncertainty: nil),
                                           lastUpdate: Date(timeIntervalSince1970: 1_700_000_010),
+                                          endDate: Date(timeIntervalSince1970: 1_700_000_060),
                                           senderID: "@bob:example.org"))
     }
 
@@ -44,7 +45,8 @@ struct TimelineItemFactoryLocationTests {
 
         let body = TimelineItemFactory.liveLocationBody(from: content, senderID: "@bob:example.org")
 
-        #expect(body == LiveLocationBody(isLive: true, lastGeoURI: nil, lastUpdate: nil, senderID: "@bob:example.org"))
+        #expect(body == LiveLocationBody(isLive: true, lastGeoURI: nil, lastUpdate: nil,
+                                          endDate: Date(timeIntervalSince1970: 1_700_000_060), senderID: "@bob:example.org"))
     }
 
     @Test
@@ -53,5 +55,12 @@ struct TimelineItemFactoryLocationTests {
                                            locations: [BeaconInfo(geoUri: "geo:51.5,-0.12", ts: 1_700_000_000_000, description: nil)])
 
         #expect(TimelineItemFactory.liveLocationBody(from: content, senderID: "@bob:example.org").isLive == false)
+    }
+
+    @Test
+    func anOverflowingTimeoutNeverEnds() {
+        let content = LiveLocationContent(isLive: true, ts: 1_700_000_000_000, description: nil, timeoutMs: .max, assetType: .sender, locations: [])
+
+        #expect(TimelineItemFactory.liveLocationBody(from: content, senderID: "@bob:example.org").endDate == .distantFuture)
     }
 }

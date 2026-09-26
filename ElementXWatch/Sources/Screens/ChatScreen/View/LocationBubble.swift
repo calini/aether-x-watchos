@@ -18,6 +18,8 @@ struct LocationBubble: View {
 
     let content: Content
     let onTap: () -> Void
+    /// Offers Stop, for the user's own running live share.
+    var onStop: (() -> Void)?
 
     @Environment(\.mapSnapshotLoader) private var mapSnapshotLoader
     /// Where the snapshot was taken: a live share only moves it once its sender has moved noticeably.
@@ -42,17 +44,23 @@ struct LocationBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            preview
-                .frame(width: Self.snapshotSize.width, height: Self.snapshotSize.height)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onTap)
-                .accessibilityLabel(isLiveShare ? WatchStrings.liveLocation : WatchStrings.location)
-            caption
-            // Task 7 adds Stop here for the user's own running share.
+            VStack(alignment: .leading, spacing: 4) {
+                preview
+                    .frame(width: Self.snapshotSize.width, height: Self.snapshotSize.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onTap)
+                    .accessibilityLabel(isLiveShare ? WatchStrings.liveLocation : WatchStrings.location)
+                caption
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            // Outside the combined element, so VoiceOver reaches it as its own button.
+            if let onStop {
+                StopLiveLocationButton(action: onStop)
+                    .frame(width: Self.snapshotSize.width)
+            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
         .onChange(of: geoURI, initial: true) {
             if MapSnapshotLoader.shouldRedraw(from: drawnGeoURI, to: geoURI) {
                 drawnGeoURI = geoURI
@@ -142,16 +150,19 @@ struct LocationBubble_Previews: PreviewProvider {
             .previewDisplayName("Location, no snapshot")
         bubble(.location(LocationBody(geoURI: nil, description: nil, body: "")), loader: nil)
             .previewDisplayName("Location, unreadable")
-        bubble(.live(LiveLocationBubbleState(isLive: true, geoURI: geoURI, lastUpdate: .now.addingTimeInterval(-30))))
+        bubble(.live(LiveLocationBubbleState(isLive: true, geoURI: geoURI, lastUpdate: .now.addingTimeInterval(-30), endDate: .now.addingTimeInterval(600))))
             .previewDisplayName("Live")
-        bubble(.live(LiveLocationBubbleState(isLive: false, geoURI: geoURI, lastUpdate: .now.addingTimeInterval(-600))))
+        bubble(.live(LiveLocationBubbleState(isLive: false, geoURI: geoURI, lastUpdate: .now.addingTimeInterval(-600), endDate: .now)))
             .previewDisplayName("Live, ended")
-        bubble(.live(LiveLocationBubbleState(isLive: true, geoURI: geoURI, lastUpdate: .now)), isOwn: true)
+        bubble(.live(LiveLocationBubbleState(isLive: true, geoURI: geoURI, lastUpdate: .now, endDate: .now.addingTimeInterval(600))), isOwn: true)
             .previewDisplayName("Own live")
+        bubble(.live(LiveLocationBubbleState(isLive: true, geoURI: geoURI, lastUpdate: .now, endDate: .now.addingTimeInterval(600))), isOwn: true, onStop: { })
+            .previewDisplayName("Own live, sharing from this watch")
     }
 
-    static func bubble(_ content: LocationBubble.Content, isOwn: Bool = false, loader: MapSnapshotLoaderProtocol? = loader) -> some View {
-        LocationBubble(content: content, onTap: { })
+    static func bubble(_ content: LocationBubble.Content, isOwn: Bool = false, loader: MapSnapshotLoaderProtocol? = loader,
+                       onStop: (() -> Void)? = nil) -> some View {
+        LocationBubble(content: content, onTap: { }, onStop: onStop)
             .padding(8)
             .background(isOwn ? Color.compound.bgBubbleOutgoing : Color.compound.bgBubbleIncoming, in: RoundedRectangle(cornerRadius: 12))
             .environment(\.mapSnapshotLoader, loader)

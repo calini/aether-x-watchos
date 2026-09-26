@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Combine
 import Foundation
 import MatrixRustSDK
 
@@ -49,5 +50,15 @@ enum LiveLocationSummaries {
 
     private static func date(fromMilliseconds milliseconds: UInt64) -> Date {
         Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000)
+    }
+}
+
+enum LiveLocationExpiry {
+    /// How often an open screen re-checks its live shares' end times: a share whose sender's device died never gets a stop event.
+    static var ticks: AnyPublisher<Void, Never> {
+        Timer.publish(every: 60, on: .main, in: .common)
+            .autoconnect()
+            .map { _ in }
+            .eraseToAnyPublisher()
     }
 }

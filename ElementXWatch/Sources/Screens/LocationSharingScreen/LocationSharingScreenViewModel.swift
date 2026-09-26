@@ -112,11 +112,12 @@ final class LocationSharingScreenViewModel: LocationSharingScreenViewModelType, 
         state.isBusy = true
         Task {
             let result = await sendLocation(geoURI)
-            state.isBusy = false
             switch result {
             case .success:
+                // Stays busy: the buttons mustn't come back while the sheet closes, or a second tap sends again.
                 actionsSubject.send(.done)
             case .failure:
+                state.isBusy = false
                 state.bindings.errorMessage = WatchStrings.sendLocationFailed
             }
         }
@@ -137,11 +138,12 @@ final class LocationSharingScreenViewModel: LocationSharingScreenViewModelType, 
         state.isBusy = true
         Task {
             let result = await liveLocationService.start(roomID: roomID, duration: duration.duration)
-            state.isBusy = false
             switch result {
             case .success:
+                // Stays busy: the buttons mustn't come back while the sheet closes, or a second tap restarts the share.
                 actionsSubject.send(.done)
             case .failure(let error):
+                state.isBusy = false
                 MXLog.error("Couldn't start live location: \(error)")
                 // Any earlier share has already been stopped by now, so the message mustn't suggest it continues.
                 state.bindings.errorMessage = WatchStrings.startLiveFailed

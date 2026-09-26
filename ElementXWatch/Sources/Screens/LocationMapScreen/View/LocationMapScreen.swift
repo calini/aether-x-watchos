@@ -84,7 +84,7 @@ struct LocationMapScreen_Previews: PreviewProvider {
     }
 
     static func makeLiveViewModel(_ updates: [[LiveLocationSummary]], initial: GeoURI?) -> LocationMapScreenViewModel {
-        LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: initial),
+        LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: initial, endDate: nil),
                                    liveLocationsPublisher: updates.publisher.eraseToAnyPublisher(),
                                    openInMaps: { _, _ in })
     }
