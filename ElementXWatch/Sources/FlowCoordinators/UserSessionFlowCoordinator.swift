@@ -22,19 +22,32 @@ enum UserSessionFlowCoordinatorAction {
 final class UserSessionFlowCoordinator: CoordinatorProtocol {
     @Observable final class Navigation {
         var path: [UserSessionRoute] = []
+        var verification: SessionVerificationScreenCoordinator?
     }
 
     private let clientProxy: ClientProxyProtocol
-    // Read once verification after a password sign-in is wired up.
     private let showsVerificationOnStart: Bool
     private let chatsCoordinator: ChatsScreenCoordinator
     private let navigation = Navigation()
     private let actionsSubject = PassthroughSubject<UserSessionFlowCoordinatorAction, Never>()
     private var childCoordinators: [UserSessionRoute: CoordinatorProtocol] = [:]
     private var cancellables = Set<AnyCancellable>()
+    // Lives and dies with the presented verification, so a dismissed screen's late action is ignored.
+    private var verificationCancellable: AnyCancellable?
+    private var isPreparingVerification = false
 
     var actionsPublisher: AnyPublisher<UserSessionFlowCoordinatorAction, Never> {
         actionsSubject.eraseToAnyPublisher()
+    }
+
+    /// Test hook.
+    var isPresentingVerification: Bool {
+        navigation.verification != nil
+    }
+
+    /// Test hook: the verification screen's context, while it is presented.
+    var verificationScreen: SessionVerificationScreenViewModel.Context? {
+        navigation.verification?.context
     }
 
     init(clientProxy: ClientProxyProtocol, showsVerificationOnStart: Bool = false) {
@@ -54,6 +67,10 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
                 }
             }
             .store(in: &cancellables)
+
+        if showsVerificationOnStart {
+            presentVerification()
+        }
     }
 
     func toPresentable() -> AnyView {
@@ -61,10 +78,39 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         return AnyView(UserSessionFlowView(navigation: navigation,
                                             root: chatsCoordinator.toPresentable(),
                                             destination: { [weak self] route in self?.destination(for: route) ?? AnyView(EmptyView()) },
-                                            onPathChange: { [weak self] in self?.pruneChildCoordinators() })
+                                            onPathChange: { [weak self] in self?.pruneChildCoordinators() },
+                                            onVerificationDismissed: { [weak self] in self?.dismissVerification() })
             .environment(\.mediaLoader, MediaLoader { source, width, height in
                 await clientProxy.loadThumbnail(for: source, width: width, height: height)
             }))
+    }
+
+    /// Fetches the controller first, so repeated requests while it loads are ignored.
+    func presentVerification() {
+        guard navigation.verification == nil, !isPreparingVerification else { return }
+        isPreparingVerification = true
+        Task { [weak self, clientProxy] in
+            let controllerProxy = await clientProxy.sessionVerificationController()
+            guard let self else { return }
+            isPreparingVerification = false
+            let coordinator = SessionVerificationScreenCoordinator(controllerProxy: controllerProxy)
+            verificationCancellable = coordinator.actionsPublisher
+                .sink { [weak self] action in
+                    switch action {
+                    case .dismiss: self?.dismissVerification()
+                    }
+                }
+            navigation.verification = coordinator
+        }
+    }
+
+    /// A swipe-down can happen mid-flow, so an in-progress verification is cancelled rather than left running.
+    func dismissVerification() {
+        if let context = navigation.verification?.context, context.viewState.isFlowActive {
+            context.send(viewAction: .cancel)
+        }
+        navigation.verification = nil
+        verificationCancellable = nil
     }
 
     private func destination(for route: UserSessionRoute) -> AnyView {
@@ -81,6 +127,7 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
             settings.actionsPublisher
                 .sink { [weak self] action in
                     switch action {
+                    case .verifySession: self?.presentVerification()
                     case .signOut: self?.actionsSubject.send(.signOut)
                     }
                 }
@@ -106,12 +153,24 @@ private struct UserSessionFlowView: View {
     let root: AnyView
     let destination: (UserSessionRoute) -> AnyView
     let onPathChange: () -> Void
+    let onVerificationDismissed: () -> Void
+
+    /// Clears the flow's state when the sheet is swiped away.
+    private var isPresentingVerification: Binding<Bool> {
+        Binding(get: { navigation.verification != nil },
+                set: { isPresented in if !isPresented { onVerificationDismissed() } })
+    }
 
     var body: some View {
         NavigationStack(path: $navigation.path) {
             root.navigationDestination(for: UserSessionRoute.self) { route in destination(route) }
         }
         .onChange(of: navigation.path) { _, _ in onPathChange() }
+        .sheet(isPresented: isPresentingVerification) {
+            if let verification = navigation.verification {
+                NavigationStack { verification.toPresentable() }
+            }
+        }
     }
 }
 

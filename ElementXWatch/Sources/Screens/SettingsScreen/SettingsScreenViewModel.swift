@@ -31,6 +31,8 @@ final class SettingsScreenViewModel: SettingsScreenViewModelType, SettingsScreen
 
     override func process(viewAction: SettingsScreenViewAction) {
         switch viewAction {
+        case .verifySession:
+            actionsSubject.send(.verifySession)
         case .signOut:
             state.bindings.isConfirmingSignOut = true
         case .confirmSignOut:

@@ -15,6 +15,11 @@ final class SessionVerificationScreenCoordinator: CoordinatorProtocol {
         viewModel.actionsPublisher
     }
 
+    /// Test hook, and lets the flow cancel an in-progress verification when the sheet is swiped away.
+    var context: SessionVerificationScreenViewModel.Context {
+        viewModel.context
+    }
+
     init(controllerProxy: SessionVerificationControllerProxyProtocol?) {
         viewModel = SessionVerificationScreenViewModel(controllerProxy: controllerProxy)
     }

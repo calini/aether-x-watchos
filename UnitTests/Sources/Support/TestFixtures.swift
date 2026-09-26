@@ -30,6 +30,20 @@ struct Setup {
     }
 }
 
+extension SessionVerificationControllerProxyMock {
+    /// A controller that emits nothing and whose calls all succeed.
+    @MainActor static var idle: SessionVerificationControllerProxyMock {
+        let mock = SessionVerificationControllerProxyMock()
+        mock.actionsPublisher = Empty().eraseToAnyPublisher()
+        mock.requestDeviceVerificationReturnValue = .success(())
+        mock.startSasVerificationReturnValue = .success(())
+        mock.approveVerificationReturnValue = .success(())
+        mock.declineVerificationReturnValue = .success(())
+        mock.cancelVerificationReturnValue = .success(())
+        return mock
+    }
+}
+
 extension RoomSummary {
     static func fixture(id: String, name: String, isDirect: Bool = true, unreadCount: Int = 0) -> RoomSummary {
         RoomSummary(id: id, name: name, avatarURL: nil, isDirect: isDirect, lastMessage: "Hello", lastMessageDate: .now,

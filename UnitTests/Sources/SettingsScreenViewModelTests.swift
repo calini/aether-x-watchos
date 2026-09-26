@@ -36,4 +36,21 @@ struct SettingsScreenViewModelTests {
         #expect(signedOut)
         cancellable.cancel()
     }
+
+    @Test
+    func unverifiedSessionsCanVerify() async throws {
+        let setup = Setup()
+        setup.verification.send(.unverified)
+        let viewModel = SettingsScreenViewModel(clientProxy: setup.clientProxy)
+        var requested = false
+        let cancellable = viewModel.actionsPublisher.sink { if case .verifySession = $0 { requested = true } }
+
+        try await waitUntil { viewModel.context.viewState.canVerify }
+        viewModel.context.send(viewAction: .verifySession)
+
+        #expect(requested)
+        setup.verification.send(.verified)
+        try await waitUntil { !viewModel.context.viewState.canVerify }
+        cancellable.cancel()
+    }
 }

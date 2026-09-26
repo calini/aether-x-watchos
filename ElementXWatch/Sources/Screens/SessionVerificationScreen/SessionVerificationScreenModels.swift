@@ -19,6 +19,16 @@ enum SessionVerificationStep: Equatable {
 
 struct SessionVerificationScreenViewState: BindableState {
     var step: SessionVerificationStep = .intro
+
+    /// Whether the flow is still running, i.e. not idle and not already at a terminal step.
+    var isFlowActive: Bool {
+        switch step {
+        case .intro, .verified, .declined, .cancelled, .failed:
+            false
+        case .waitingForAcceptance, .startingSas, .comparing, .confirming:
+            true
+        }
+    }
 }
 
 enum SessionVerificationScreenViewAction {

@@ -6,6 +6,7 @@
 //
 
 enum SettingsScreenViewModelAction {
+    case verifySession
     case signOut
 }
 
@@ -14,6 +15,10 @@ struct SettingsScreenViewState: BindableState {
     var displayName: String?
     var verification: SessionVerification = .unknown
     var bindings = SettingsScreenBindings()
+
+    var canVerify: Bool {
+        verification == .unverified
+    }
 }
 
 struct SettingsScreenBindings {
@@ -21,6 +26,7 @@ struct SettingsScreenBindings {
 }
 
 enum SettingsScreenViewAction {
+    case verifySession
     case signOut
     case confirmSignOut
 }

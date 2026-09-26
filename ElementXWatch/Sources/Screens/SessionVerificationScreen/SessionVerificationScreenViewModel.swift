@@ -77,21 +77,11 @@ final class SessionVerificationScreenViewModel: SessionVerificationScreenViewMod
                 break
             }
         case .cancelled:
-            guard isFlowActive else { return }
+            guard state.isFlowActive else { return }
             state.step = .cancelled
         case .failed:
-            guard isFlowActive else { return }
+            guard state.isFlowActive else { return }
             state.step = .failed
-        }
-    }
-
-    /// Whether the flow is still running, i.e. not idle and not already at a terminal step.
-    private var isFlowActive: Bool {
-        switch state.step {
-        case .intro, .verified, .declined, .cancelled, .failed:
-            false
-        case .waitingForAcceptance, .startingSas, .comparing, .confirming:
-            true
         }
     }
 
@@ -100,7 +90,8 @@ final class SessionVerificationScreenViewModel: SessionVerificationScreenViewMod
     private func perform(setting step: SessionVerificationStep, _ call: @escaping () async -> Result<Void, SessionVerificationControllerProxyError>) {
         state.step = step
         Task { [weak self] in
-            guard let self, case .failure = await call() else { return }
+            // Call before checking `self`: a cancel sent as the screen is dismissed must still reach the SDK.
+            guard case .failure = await call(), let self else { return }
             // Only fail if nothing else has moved the step on since, and never override a final user choice.
             guard state.step == step, step != .declined, step != .cancelled else { return }
             state.step = .failed

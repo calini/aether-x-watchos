@@ -18,6 +18,9 @@ struct SettingsScreen: View {
                     Text(context.viewState.userID).font(.footnote).foregroundStyle(Color.compound.textSecondary)
                 }
                 Label(verificationText, systemImage: context.viewState.verification == .verified ? "checkmark.shield" : "exclamationmark.shield")
+                if context.viewState.canVerify {
+                    Button(WatchStrings.verifyTitle) { context.send(viewAction: .verifySession) }
+                }
             }
             Section {
                 Button(WatchStrings.signOut, role: .destructive) { context.send(viewAction: .signOut) }
@@ -58,7 +61,7 @@ struct SettingsScreen_Previews: PreviewProvider {
         NavigationStack { SettingsScreen(context: SettingsScreenViewModel(clientProxy: ClientProxyMock.preview).context) }
             .previewDisplayName("Verified")
         NavigationStack { SettingsScreen(context: unverified.context) }
-            .previewDisplayName("Unverified")
+            .previewDisplayName("Unverified with verify row")
         NavigationStack { SettingsScreen(context: checkingVerification.context) }
             .previewDisplayName("Checking verification")
     }
