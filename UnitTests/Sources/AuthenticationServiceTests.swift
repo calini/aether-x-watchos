@@ -62,6 +62,42 @@ struct AuthenticationServiceTests {
         #expect(result.failureValue == .unknown)
     }
 
+    @Test
+    func configureInterleavedWithALaterConfigureDoesNotOrphanTheStaleDirectories() async throws {
+        StubURLProtocol.install { request, _ in Self.homeserver(request, loginTypes: ["m.login.password"], msc4108: false) }
+        let keychain = KeychainStore(service: "tests.\(UUID().uuidString)")
+        let realFactory = ClientFactory(transport: URLSessionTransport(configuration: StubURLProtocol.configuration()),
+                                        sessionDelegate: SessionDelegate(keychainStore: keychain))
+        let factory = ClientFactoryMock()
+        let gate = AsyncGate()
+        // Only the first (stale) call is held open; the second one that supersedes it runs straight through.
+        factory.makeLoginClientServerNameDirectoriesPassphraseClosure = { serverName, directories, passphrase in
+            if serverName == "https://a.example.org" { await gate.wait() }
+            return try await realFactory.makeLoginClient(serverName: serverName, directories: directories, passphrase: passphrase)
+        }
+        let service = AuthenticationService(clientFactory: factory, sessionStore: SessionStore(keychainStore: keychain))
+
+        let staleConfigure = Task { await service.configure(server: "https://a.example.org") }
+        try await waitUntil { factory.makeLoginClientServerNameDirectoriesPassphraseCallsCount == 1 }
+        let staleDirectories = factory.makeLoginClientServerNameDirectoriesPassphraseReceivedInvocations[0].directories
+        #expect(FileManager.default.fileExists(atPath: staleDirectories.dataPath))
+
+        let latestOptions = try await service.configure(server: "https://b.example.org").get()
+        #expect(latestOptions.serverName == "b.example.org")
+        let latestDirectories = factory.makeLoginClientServerNameDirectoriesPassphraseReceivedInvocations[1].directories
+        #expect(FileManager.default.fileExists(atPath: latestDirectories.dataPath))
+
+        await gate.open()
+        let staleResult = await staleConfigure.value
+        #expect(staleResult.failureValue == .unknown)
+        #expect(!FileManager.default.fileExists(atPath: staleDirectories.dataPath))
+
+        // pendingLogin still belongs to the latest configure: reset() finds and deletes ITS directories.
+        #expect(FileManager.default.fileExists(atPath: latestDirectories.dataPath))
+        service.reset()
+        #expect(!FileManager.default.fileExists(atPath: latestDirectories.dataPath))
+    }
+
     // MARK: - Helpers
 
     private func makeService() -> AuthenticationService {

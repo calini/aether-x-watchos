@@ -62,7 +62,6 @@ protocol AuthenticationServiceProtocol {
 
 /// The login client for the chosen server. Its directories become the session's once login succeeds.
 private struct PendingLogin {
-    let server: String
     let client: Client
     let directories: SessionDirectories
     let passphrase: Data
@@ -75,6 +74,10 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
     private let sessionStore: SessionStoreProtocol
     private var pendingLogin: PendingLogin?
     private var lastServer: String?
+    /// Bumped by every `reset()` (including the implicit one at the top of `configure`), so an
+    /// in-flight `configure` can tell, after an `await`, that a newer call or an explicit `reset()`
+    /// superseded it and its own client/directories must be thrown away instead of adopted.
+    private var generation = 0
 
     init(clientFactory: ClientFactoryProtocol, sessionStore: SessionStoreProtocol) {
         self.clientFactory = clientFactory
@@ -83,6 +86,7 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
 
     func configure(server: String) async -> Result<LoginOptions, AuthenticationError> {
         reset()
+        let myGeneration = generation
         lastServer = server
 
         let pending: PendingLogin
@@ -90,10 +94,21 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
         case .success(let login): pending = login
         case .failure(let error): return .failure(error)
         }
+        guard myGeneration == generation else {
+            // Superseded by a reset() or another configure() while awaiting above: this attempt's
+            // directories are its own (never adopted by anyone else), so they're safe to delete here.
+            pending.directories.delete()
+            return .failure(.unknown)
+        }
         pendingLogin = pending
 
         let details = await pending.client.homeserverLoginDetails()
         let supportsQRCode = (try? await pending.client.isLoginWithQrCodeSupported()) ?? false
+        guard myGeneration == generation else {
+            pending.directories.delete()
+            return .failure(.unknown)
+        }
+
         let serverName = (try? pending.client.userIdServerName()) ?? URL(string: details.url())?.host() ?? server
         return .success(LoginOptions(serverName: serverName,
                                      supportsPassword: details.supportsPasswordLogin(),
@@ -115,6 +130,7 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
     }
 
     func reset() {
+        generation += 1
         pendingLogin?.directories.delete()
         pendingLogin = nil
     }
@@ -167,7 +183,7 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
         do {
             try directories.create()
             let client = try await clientFactory.makeLoginClient(serverName: server, directories: directories, passphrase: passphrase)
-            return .success(PendingLogin(server: server, client: client, directories: directories, passphrase: passphrase))
+            return .success(PendingLogin(client: client, directories: directories, passphrase: passphrase))
         } catch {
             MXLog.error("Configuring server \(server) failed: \(error)")
             directories.delete()
