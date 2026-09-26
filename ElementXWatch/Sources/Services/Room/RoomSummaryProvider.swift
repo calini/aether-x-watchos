@@ -20,7 +20,7 @@ final class RoomSummaryProvider: RoomSummaryProviderProtocol {
     private static let filter: RoomListEntriesDynamicFilterKind = .all(filters: [.nonSpace, .joined, .deduplicateVersions])
     private static let pageSize: UInt32 = 200
 
-    private let roomListService: RoomListService
+    private let subscribe: (RoomListEntriesListener) async throws -> RoomListEntriesSubscriptionProtocol
     /// `nil` until the first list arrives, so the chats screen can show a loading state.
     private let roomsSubject = CurrentValueSubject<[RoomSummary]?, Never>(nil)
 
@@ -28,20 +28,25 @@ final class RoomSummaryProvider: RoomSummaryProviderProtocol {
     private var summariesByID: [String: RoomSummary] = [:]
     /// Set before the first `await` so overlapping `start()` calls can't both subscribe.
     private var isStarted = false
-    private var controller: RoomListDynamicEntriesController?
-    private var entriesHandle: TaskHandle?
+    private var subscription: RoomListEntriesSubscriptionProtocol?
     private var refreshTask: Task<Void, Never>?
 
     var roomsPublisher: AnyPublisher<[RoomSummary], Never> {
         roomsSubject.compactMap { $0 }.eraseToAnyPublisher()
     }
 
-    init(roomListService: RoomListService) {
-        self.roomListService = roomListService
+    convenience init(roomListService: RoomListService) {
+        self.init { listener in
+            let roomList = try await roomListService.allRooms()
+            return RoomListEntriesSubscription(roomList.entriesWithDynamicAdapters(pageSize: Self.pageSize, listener: listener))
+        }
+    }
+
+    init(subscribe: @escaping (RoomListEntriesListener) async throws -> RoomListEntriesSubscriptionProtocol) {
+        self.subscribe = subscribe
     }
 
     deinit {
-        entriesHandle?.cancel()
         refreshTask?.cancel()
     }
 
@@ -50,14 +55,12 @@ final class RoomSummaryProvider: RoomSummaryProviderProtocol {
         isStarted = true
 
         do {
-            let roomList = try await roomListService.allRooms()
             let listener = SDKListener<[RoomListEntriesUpdate]>.onMainActor { [weak self] updates in
                 self?.handle(updates)
             }
-            let result = roomList.entriesWithDynamicAdapters(pageSize: Self.pageSize, listener: listener)
-            controller = result.controller()
-            entriesHandle = result.entriesStream()
-            _ = controller?.setFilter(kind: Self.filter)
+            let subscription = try await subscribe(listener)
+            subscription.setFilter(Self.filter)
+            self.subscription = subscription
         } catch {
             MXLog.error("Failed starting the room list: \(error)")
             isStarted = false
