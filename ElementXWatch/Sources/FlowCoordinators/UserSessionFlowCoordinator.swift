@@ -25,6 +25,8 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
     }
 
     private let clientProxy: ClientProxyProtocol
+    // Read once verification after a password sign-in is wired up.
+    private let showsVerificationOnStart: Bool
     private let chatsCoordinator: ChatsScreenCoordinator
     private let navigation = Navigation()
     private let actionsSubject = PassthroughSubject<UserSessionFlowCoordinatorAction, Never>()
@@ -35,8 +37,9 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         actionsSubject.eraseToAnyPublisher()
     }
 
-    init(clientProxy: ClientProxyProtocol) {
+    init(clientProxy: ClientProxyProtocol, showsVerificationOnStart: Bool = false) {
         self.clientProxy = clientProxy
+        self.showsVerificationOnStart = showsVerificationOnStart
         chatsCoordinator = ChatsScreenCoordinator(clientProxy: clientProxy)
     }
 

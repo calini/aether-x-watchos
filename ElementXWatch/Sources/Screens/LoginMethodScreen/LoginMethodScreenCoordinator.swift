@@ -15,6 +15,10 @@ final class LoginMethodScreenCoordinator: CoordinatorProtocol {
         viewModel.actionsPublisher
     }
 
+    var context: LoginMethodScreenViewModel.Context {
+        viewModel.context
+    }
+
     init(options: LoginOptions) {
         viewModel = LoginMethodScreenViewModel(options: options)
     }

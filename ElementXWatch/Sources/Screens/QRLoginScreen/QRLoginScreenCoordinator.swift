@@ -15,6 +15,10 @@ final class QRLoginScreenCoordinator: CoordinatorProtocol {
         viewModel.actionsPublisher
     }
 
+    var context: QRLoginScreenViewModel.Context {
+        viewModel.context
+    }
+
     init(qrLoginService: QRLoginServiceProtocol) {
         viewModel = QRLoginScreenViewModel(qrLoginService: qrLoginService)
     }

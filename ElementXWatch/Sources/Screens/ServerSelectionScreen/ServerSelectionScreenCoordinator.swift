@@ -15,6 +15,10 @@ final class ServerSelectionScreenCoordinator: CoordinatorProtocol {
         viewModel.actionsPublisher
     }
 
+    var context: ServerSelectionScreenViewModel.Context {
+        viewModel.context
+    }
+
     init(authenticationService: AuthenticationServiceProtocol) {
         viewModel = ServerSelectionScreenViewModel(authenticationService: authenticationService)
     }

@@ -21,6 +21,7 @@ struct ElementXWatchApp: App {
         let authenticationService = AuthenticationService(clientFactory: clientFactory, sessionStore: sessionStore)
         _appCoordinator = State(initialValue: AppCoordinator(sessionStore: sessionStore,
                                                               restorer: UserSessionRestorer(sessionStore: sessionStore, clientFactory: clientFactory),
+                                                              authenticationService: authenticationService,
                                                               qrLoginService: authenticationService))
     }
 

@@ -21,6 +21,7 @@ import SwiftUI
 
     @ObservationIgnored private let sessionStore: SessionStoreProtocol
     @ObservationIgnored private let restorer: UserSessionRestorerProtocol
+    @ObservationIgnored private let authenticationService: AuthenticationServiceProtocol
     @ObservationIgnored private let qrLoginService: QRLoginServiceProtocol
     @ObservationIgnored private var clientProxy: ClientProxyProtocol?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
@@ -41,9 +42,13 @@ import SwiftUI
         }
     }
 
-    init(sessionStore: SessionStoreProtocol, restorer: UserSessionRestorerProtocol, qrLoginService: QRLoginServiceProtocol) {
+    init(sessionStore: SessionStoreProtocol,
+         restorer: UserSessionRestorerProtocol,
+         authenticationService: AuthenticationServiceProtocol,
+         qrLoginService: QRLoginServiceProtocol) {
         self.sessionStore = sessionStore
         self.restorer = restorer
+        self.authenticationService = authenticationService
         self.qrLoginService = qrLoginService
     }
 
@@ -85,16 +90,16 @@ import SwiftUI
         clientProxy = nil
         userSessionFlow = nil
 
-        let flow = AuthenticationFlowCoordinator(qrLoginService: qrLoginService)
+        let flow = AuthenticationFlowCoordinator(authenticationService: authenticationService, qrLoginService: qrLoginService)
         flow.signedInPublisher
-            .sink { [weak self] clientProxy in self?.showSession(clientProxy) }
+            .sink { [weak self] signedIn in self?.showSession(signedIn.clientProxy, needsVerification: signedIn.needsVerification) }
             .store(in: &cancellables)
         flow.start()
         authenticationFlow = flow
         phase = .signedOut
     }
 
-    private func showSession(_ clientProxy: ClientProxyProtocol) {
+    private func showSession(_ clientProxy: ClientProxyProtocol, needsVerification: Bool = false) {
         cancellables.removeAll()
         authenticationFlow = nil
         self.clientProxy = clientProxy
@@ -109,7 +114,7 @@ import SwiftUI
             }
             .store(in: &cancellables)
 
-        let flow = UserSessionFlowCoordinator(clientProxy: clientProxy)
+        let flow = UserSessionFlowCoordinator(clientProxy: clientProxy, showsVerificationOnStart: needsVerification)
         flow.actionsPublisher
             .sink { [weak self] action in
                 switch action {

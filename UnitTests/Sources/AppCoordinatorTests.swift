@@ -213,7 +213,10 @@ struct AppCoordinatorTests {
     private func makeCoordinator() -> (AppCoordinator, UserSessionRestorerMock, SessionStoreMock, Setup) {
         let restorer = UserSessionRestorerMock()
         let sessionStore = SessionStoreMock()
-        let coordinator = AppCoordinator(sessionStore: sessionStore, restorer: restorer, qrLoginService: QRLoginServiceMock())
+        let coordinator = AppCoordinator(sessionStore: sessionStore,
+                                         restorer: restorer,
+                                         authenticationService: AuthenticationServiceMock(),
+                                         qrLoginService: QRLoginServiceMock())
         return (coordinator, restorer, sessionStore, Setup())
     }
 }

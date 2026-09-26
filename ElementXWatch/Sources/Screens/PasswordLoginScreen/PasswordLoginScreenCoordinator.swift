@@ -15,6 +15,10 @@ final class PasswordLoginScreenCoordinator: CoordinatorProtocol {
         viewModel.actionsPublisher
     }
 
+    var context: PasswordLoginScreenViewModel.Context {
+        viewModel.context
+    }
+
     init(serverName: String, authenticationService: AuthenticationServiceProtocol) {
         viewModel = PasswordLoginScreenViewModel(serverName: serverName, authenticationService: authenticationService)
     }
