@@ -45,6 +45,23 @@ enum ClientProxyAction: Equatable {
     case authError(isSoftLogout: Bool)
 }
 
+/// A change to one of our own live location shares, in any room.
+struct OwnBeaconInfo: Equatable {
+    let roomID: String
+    let eventID: String
+    let isLive: Bool
+
+    init(roomID: String, eventID: String, isLive: Bool) {
+        self.roomID = roomID
+        self.eventID = eventID
+        self.isLive = isLive
+    }
+
+    init(_ update: BeaconInfoUpdate) {
+        self.init(roomID: update.roomId, eventID: update.eventId, isLive: update.live)
+    }
+}
+
 // sourcery: AutoMockable
 protocol ClientProxyProtocol: AnyObject, Sendable {
     var userID: String { get }
@@ -54,6 +71,8 @@ protocol ClientProxyProtocol: AnyObject, Sendable {
     var verificationStatePublisher: AnyPublisher<SessionVerification, Never> { get }
     var actionsPublisher: AnyPublisher<ClientProxyAction, Never> { get }
     var roomSummaryProvider: RoomSummaryProviderProtocol { get }
+    /// Our own live shares across rooms, from `Client.subscribeToOwnBeaconInfoUpdates`.
+    var ownBeaconInfoPublisher: AnyPublisher<OwnBeaconInfo, Never> { get }
 
     func startSync() async
     func stopSync() async
@@ -61,6 +80,7 @@ protocol ClientProxyProtocol: AnyObject, Sendable {
     func loadThumbnail(for source: MediaSourceProxy, width: Int, height: Int) async -> Data?
     func loadMediaContent(for source: MediaSourceProxy) async -> Data?
     func timelineProxy(for roomID: String) async -> TimelineProxyProtocol?
+    func roomLocationProxy(for roomID: String) async -> RoomLocationProxyProtocol?
     func logout() async
     func sessionVerificationController() async -> SessionVerificationControllerProxyProtocol?
 }

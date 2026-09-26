@@ -240,6 +240,11 @@ nonisolated class ClientProxyMock: ClientProxyProtocol, @unchecked Sendable {
         set(value) { underlyingRoomSummaryProvider = value }
     }
     nonisolated(unsafe) var underlyingRoomSummaryProvider: RoomSummaryProviderProtocol!
+    var ownBeaconInfoPublisher: AnyPublisher<OwnBeaconInfo, Never> {
+        get { return underlyingOwnBeaconInfoPublisher }
+        set(value) { underlyingOwnBeaconInfoPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingOwnBeaconInfoPublisher: AnyPublisher<OwnBeaconInfo, Never>!
 
     //MARK: - startSync
 
@@ -429,6 +434,48 @@ nonisolated class ClientProxyMock: ClientProxyProtocol, @unchecked Sendable {
             return timelineProxyForReturnValue
         }
     }
+    //MARK: - roomLocationProxy
+
+    private let roomLocationProxyForCallsCountLock = NSLock()
+    private nonisolated(unsafe) var roomLocationProxyForUnderlyingCallsCount = 0
+    var roomLocationProxyForCallsCount: Int {
+        get { roomLocationProxyForCallsCountLock.withLock { roomLocationProxyForUnderlyingCallsCount } }
+        set { roomLocationProxyForCallsCountLock.withLock { roomLocationProxyForUnderlyingCallsCount = newValue } }
+    }
+    var roomLocationProxyForCalled: Bool {
+        return roomLocationProxyForCallsCount > 0
+    }
+    private let roomLocationProxyForReceivedRoomIDLock = NSLock()
+    private nonisolated(unsafe) var roomLocationProxyForUnderlyingReceivedRoomID: String?
+    var roomLocationProxyForReceivedRoomID: String? {
+        get { roomLocationProxyForReceivedRoomIDLock.withLock { roomLocationProxyForUnderlyingReceivedRoomID } }
+        set { roomLocationProxyForReceivedRoomIDLock.withLock { roomLocationProxyForUnderlyingReceivedRoomID = newValue } }
+    }
+    private let roomLocationProxyForReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var roomLocationProxyForUnderlyingReceivedInvocations: [String] = []
+    var roomLocationProxyForReceivedInvocations: [String] {
+        get { roomLocationProxyForReceivedInvocationsLock.withLock { roomLocationProxyForUnderlyingReceivedInvocations } }
+        set { roomLocationProxyForReceivedInvocationsLock.withLock { roomLocationProxyForUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let roomLocationProxyForReturnValueLock = NSLock()
+    private nonisolated(unsafe) var roomLocationProxyForUnderlyingReturnValue: RoomLocationProxyProtocol?
+    var roomLocationProxyForReturnValue: RoomLocationProxyProtocol? {
+        get { roomLocationProxyForReturnValueLock.withLock { roomLocationProxyForUnderlyingReturnValue } }
+        set { roomLocationProxyForReturnValueLock.withLock { roomLocationProxyForUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var roomLocationProxyForClosure: ((String) async -> RoomLocationProxyProtocol?)?
+
+    @concurrent func roomLocationProxy(for roomID: String) async -> RoomLocationProxyProtocol? {
+        roomLocationProxyForCallsCountLock.withLock { roomLocationProxyForUnderlyingCallsCount += 1 }
+        roomLocationProxyForReceivedRoomID = roomID
+        roomLocationProxyForReceivedInvocationsLock.withLock { roomLocationProxyForUnderlyingReceivedInvocations.append(roomID) }
+        if let roomLocationProxyForClosure = roomLocationProxyForClosure {
+            return await roomLocationProxyForClosure(roomID)
+        } else {
+            return roomLocationProxyForReturnValue
+        }
+    }
     //MARK: - logout
 
     private let logoutCallsCountLock = NSLock()
@@ -596,6 +643,131 @@ nonisolated class QRLoginServiceMock: QRLoginServiceProtocol, @unchecked Sendabl
             return await loginWithGeneratedQRCodeOnProgressClosure(onProgress)
         } else {
             return loginWithGeneratedQRCodeOnProgressReturnValue
+        }
+    }
+}
+nonisolated class RoomLocationProxyMock: RoomLocationProxyProtocol, @unchecked Sendable {
+    var roomID: String {
+        get { return underlyingRoomID }
+        set(value) { underlyingRoomID = value }
+    }
+    nonisolated(unsafe) var underlyingRoomID: String!
+    var liveLocationsPublisher: AnyPublisher<[LiveLocationSummary], Never> {
+        get { return underlyingLiveLocationsPublisher }
+        set(value) { underlyingLiveLocationsPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingLiveLocationsPublisher: AnyPublisher<[LiveLocationSummary], Never>!
+
+    //MARK: - startLiveLocationShare
+
+    private let startLiveLocationShareDurationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startLiveLocationShareDurationUnderlyingCallsCount = 0
+    var startLiveLocationShareDurationCallsCount: Int {
+        get { startLiveLocationShareDurationCallsCountLock.withLock { startLiveLocationShareDurationUnderlyingCallsCount } }
+        set { startLiveLocationShareDurationCallsCountLock.withLock { startLiveLocationShareDurationUnderlyingCallsCount = newValue } }
+    }
+    var startLiveLocationShareDurationCalled: Bool {
+        return startLiveLocationShareDurationCallsCount > 0
+    }
+    private let startLiveLocationShareDurationReceivedDurationLock = NSLock()
+    private nonisolated(unsafe) var startLiveLocationShareDurationUnderlyingReceivedDuration: Duration?
+    var startLiveLocationShareDurationReceivedDuration: Duration? {
+        get { startLiveLocationShareDurationReceivedDurationLock.withLock { startLiveLocationShareDurationUnderlyingReceivedDuration } }
+        set { startLiveLocationShareDurationReceivedDurationLock.withLock { startLiveLocationShareDurationUnderlyingReceivedDuration = newValue } }
+    }
+    private let startLiveLocationShareDurationReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var startLiveLocationShareDurationUnderlyingReceivedInvocations: [Duration] = []
+    var startLiveLocationShareDurationReceivedInvocations: [Duration] {
+        get { startLiveLocationShareDurationReceivedInvocationsLock.withLock { startLiveLocationShareDurationUnderlyingReceivedInvocations } }
+        set { startLiveLocationShareDurationReceivedInvocationsLock.withLock { startLiveLocationShareDurationUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let startLiveLocationShareDurationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var startLiveLocationShareDurationUnderlyingReturnValue: Result<String, LocationProxyError>!
+    var startLiveLocationShareDurationReturnValue: Result<String, LocationProxyError>! {
+        get { startLiveLocationShareDurationReturnValueLock.withLock { startLiveLocationShareDurationUnderlyingReturnValue } }
+        set { startLiveLocationShareDurationReturnValueLock.withLock { startLiveLocationShareDurationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var startLiveLocationShareDurationClosure: ((Duration) async -> Result<String, LocationProxyError>)?
+
+    @concurrent func startLiveLocationShare(duration: Duration) async -> Result<String, LocationProxyError> {
+        startLiveLocationShareDurationCallsCountLock.withLock { startLiveLocationShareDurationUnderlyingCallsCount += 1 }
+        startLiveLocationShareDurationReceivedDuration = duration
+        startLiveLocationShareDurationReceivedInvocationsLock.withLock { startLiveLocationShareDurationUnderlyingReceivedInvocations.append(duration) }
+        if let startLiveLocationShareDurationClosure = startLiveLocationShareDurationClosure {
+            return await startLiveLocationShareDurationClosure(duration)
+        } else {
+            return startLiveLocationShareDurationReturnValue
+        }
+    }
+    //MARK: - sendLiveLocation
+
+    private let sendLiveLocationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var sendLiveLocationUnderlyingCallsCount = 0
+    var sendLiveLocationCallsCount: Int {
+        get { sendLiveLocationCallsCountLock.withLock { sendLiveLocationUnderlyingCallsCount } }
+        set { sendLiveLocationCallsCountLock.withLock { sendLiveLocationUnderlyingCallsCount = newValue } }
+    }
+    var sendLiveLocationCalled: Bool {
+        return sendLiveLocationCallsCount > 0
+    }
+    private let sendLiveLocationReceivedGeoURILock = NSLock()
+    private nonisolated(unsafe) var sendLiveLocationUnderlyingReceivedGeoURI: GeoURI?
+    var sendLiveLocationReceivedGeoURI: GeoURI? {
+        get { sendLiveLocationReceivedGeoURILock.withLock { sendLiveLocationUnderlyingReceivedGeoURI } }
+        set { sendLiveLocationReceivedGeoURILock.withLock { sendLiveLocationUnderlyingReceivedGeoURI = newValue } }
+    }
+    private let sendLiveLocationReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var sendLiveLocationUnderlyingReceivedInvocations: [GeoURI] = []
+    var sendLiveLocationReceivedInvocations: [GeoURI] {
+        get { sendLiveLocationReceivedInvocationsLock.withLock { sendLiveLocationUnderlyingReceivedInvocations } }
+        set { sendLiveLocationReceivedInvocationsLock.withLock { sendLiveLocationUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let sendLiveLocationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var sendLiveLocationUnderlyingReturnValue: Result<Void, LocationProxyError>!
+    var sendLiveLocationReturnValue: Result<Void, LocationProxyError>! {
+        get { sendLiveLocationReturnValueLock.withLock { sendLiveLocationUnderlyingReturnValue } }
+        set { sendLiveLocationReturnValueLock.withLock { sendLiveLocationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var sendLiveLocationClosure: ((GeoURI) async -> Result<Void, LocationProxyError>)?
+
+    @concurrent func sendLiveLocation(_ geoURI: GeoURI) async -> Result<Void, LocationProxyError> {
+        sendLiveLocationCallsCountLock.withLock { sendLiveLocationUnderlyingCallsCount += 1 }
+        sendLiveLocationReceivedGeoURI = geoURI
+        sendLiveLocationReceivedInvocationsLock.withLock { sendLiveLocationUnderlyingReceivedInvocations.append(geoURI) }
+        if let sendLiveLocationClosure = sendLiveLocationClosure {
+            return await sendLiveLocationClosure(geoURI)
+        } else {
+            return sendLiveLocationReturnValue
+        }
+    }
+    //MARK: - stopLiveLocationShare
+
+    private let stopLiveLocationShareCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopLiveLocationShareUnderlyingCallsCount = 0
+    var stopLiveLocationShareCallsCount: Int {
+        get { stopLiveLocationShareCallsCountLock.withLock { stopLiveLocationShareUnderlyingCallsCount } }
+        set { stopLiveLocationShareCallsCountLock.withLock { stopLiveLocationShareUnderlyingCallsCount = newValue } }
+    }
+    var stopLiveLocationShareCalled: Bool {
+        return stopLiveLocationShareCallsCount > 0
+    }
+
+    private let stopLiveLocationShareReturnValueLock = NSLock()
+    private nonisolated(unsafe) var stopLiveLocationShareUnderlyingReturnValue: Result<Void, LocationProxyError>!
+    var stopLiveLocationShareReturnValue: Result<Void, LocationProxyError>! {
+        get { stopLiveLocationShareReturnValueLock.withLock { stopLiveLocationShareUnderlyingReturnValue } }
+        set { stopLiveLocationShareReturnValueLock.withLock { stopLiveLocationShareUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var stopLiveLocationShareClosure: (() async -> Result<Void, LocationProxyError>)?
+
+    @concurrent func stopLiveLocationShare() async -> Result<Void, LocationProxyError> {
+        stopLiveLocationShareCallsCountLock.withLock { stopLiveLocationShareUnderlyingCallsCount += 1 }
+        if let stopLiveLocationShareClosure = stopLiveLocationShareClosure {
+            return await stopLiveLocationShareClosure()
+        } else {
+            return stopLiveLocationShareReturnValue
         }
     }
 }
@@ -948,6 +1120,48 @@ nonisolated class TimelineProxyMock: TimelineProxyProtocol, @unchecked Sendable 
             return await sendMessageInReplyToClosure(message, eventID)
         } else {
             return sendMessageInReplyToReturnValue
+        }
+    }
+    //MARK: - sendLocation
+
+    private let sendLocationDescriptionCallsCountLock = NSLock()
+    private nonisolated(unsafe) var sendLocationDescriptionUnderlyingCallsCount = 0
+    var sendLocationDescriptionCallsCount: Int {
+        get { sendLocationDescriptionCallsCountLock.withLock { sendLocationDescriptionUnderlyingCallsCount } }
+        set { sendLocationDescriptionCallsCountLock.withLock { sendLocationDescriptionUnderlyingCallsCount = newValue } }
+    }
+    var sendLocationDescriptionCalled: Bool {
+        return sendLocationDescriptionCallsCount > 0
+    }
+    private let sendLocationDescriptionReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var sendLocationDescriptionUnderlyingReceivedArguments: (geoURI: GeoURI, description: String?)?
+    var sendLocationDescriptionReceivedArguments: (geoURI: GeoURI, description: String?)? {
+        get { sendLocationDescriptionReceivedArgumentsLock.withLock { sendLocationDescriptionUnderlyingReceivedArguments } }
+        set { sendLocationDescriptionReceivedArgumentsLock.withLock { sendLocationDescriptionUnderlyingReceivedArguments = newValue } }
+    }
+    private let sendLocationDescriptionReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var sendLocationDescriptionUnderlyingReceivedInvocations: [(geoURI: GeoURI, description: String?)] = []
+    var sendLocationDescriptionReceivedInvocations: [(geoURI: GeoURI, description: String?)] {
+        get { sendLocationDescriptionReceivedInvocationsLock.withLock { sendLocationDescriptionUnderlyingReceivedInvocations } }
+        set { sendLocationDescriptionReceivedInvocationsLock.withLock { sendLocationDescriptionUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let sendLocationDescriptionReturnValueLock = NSLock()
+    private nonisolated(unsafe) var sendLocationDescriptionUnderlyingReturnValue: Result<Void, TimelineProxyError>!
+    var sendLocationDescriptionReturnValue: Result<Void, TimelineProxyError>! {
+        get { sendLocationDescriptionReturnValueLock.withLock { sendLocationDescriptionUnderlyingReturnValue } }
+        set { sendLocationDescriptionReturnValueLock.withLock { sendLocationDescriptionUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var sendLocationDescriptionClosure: ((GeoURI, String?) async -> Result<Void, TimelineProxyError>)?
+
+    @concurrent func sendLocation(_ geoURI: GeoURI, description: String?) async -> Result<Void, TimelineProxyError> {
+        sendLocationDescriptionCallsCountLock.withLock { sendLocationDescriptionUnderlyingCallsCount += 1 }
+        sendLocationDescriptionReceivedArguments = (geoURI: geoURI, description: description)
+        sendLocationDescriptionReceivedInvocationsLock.withLock { sendLocationDescriptionUnderlyingReceivedInvocations.append((geoURI: geoURI, description: description)) }
+        if let sendLocationDescriptionClosure = sendLocationDescriptionClosure {
+            return await sendLocationDescriptionClosure(geoURI, description)
+        } else {
+            return sendLocationDescriptionReturnValue
         }
     }
     //MARK: - toggleReaction

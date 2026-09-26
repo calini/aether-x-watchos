@@ -21,6 +21,7 @@ protocol TimelineProxyProtocol: AnyObject, Sendable {
     /// Loads older messages. Succeeds with `true` once the start of the room is reached.
     func paginateBackwards() async -> Result<Bool, TimelineProxyError>
     func send(message: String, inReplyTo eventID: String?) async -> Result<Void, TimelineProxyError>
+    func sendLocation(_ geoURI: GeoURI, description: String?) async -> Result<Void, TimelineProxyError>
     func toggleReaction(_ key: String, to itemID: EventOrTransactionId) async -> Result<Void, TimelineProxyError>
     func retrySend(_ itemID: EventOrTransactionId) async -> Result<Void, TimelineProxyError>
     func markAsRead() async
@@ -86,6 +87,18 @@ final class TimelineProxy: TimelineProxyProtocol {
             return .success(())
         } catch {
             MXLog.error("Sending a message failed: \(error)")
+            return .failure(.sdkError(error.localizedDescription))
+        }
+    }
+
+    func sendLocation(_ geoURI: GeoURI, description: String?) async -> Result<Void, TimelineProxyError> {
+        do {
+            try await timeline.sendLocation(body: "Location", geoUri: geoURI.string, description: description,
+                                            zoomLevel: nil, assetType: .sender, repliedToEventId: nil)
+            return .success(())
+        } catch {
+            // Only the type: the SDK's message could echo the geo URI.
+            MXLog.error("Sending a location failed: \(type(of: error))")
             return .failure(.sdkError(error.localizedDescription))
         }
     }

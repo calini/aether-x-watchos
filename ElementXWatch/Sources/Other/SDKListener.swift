@@ -98,6 +98,14 @@ nonisolated extension SDKListener: VerificationStateListener where T == Verifica
     func onUpdate(status: VerificationState) { onUpdateClosure(status) }
 }
 
+nonisolated extension SDKListener: LiveLocationsListener where T == [LiveLocationShareUpdate] {
+    func onUpdate(updates: [LiveLocationShareUpdate]) { onUpdateClosure(updates) }
+}
+
+nonisolated extension SDKListener: BeaconInfoListener where T == BeaconInfoUpdate {
+    func onUpdate(update: BeaconInfoUpdate) { onUpdateClosure(update) }
+}
+
 nonisolated extension SDKListener {
     /// Delivers a value to the listener's closure (for wrappers that aren't SDK listener protocols).
     func forward(_ value: T) { onUpdateClosure(value) }

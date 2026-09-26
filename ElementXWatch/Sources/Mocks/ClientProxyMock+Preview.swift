@@ -16,6 +16,7 @@ extension ClientProxyMock {
         mock.syncStatePublisher = Just(.running).eraseToAnyPublisher()
         mock.verificationStatePublisher = Just(.verified).eraseToAnyPublisher()
         mock.actionsPublisher = Empty().eraseToAnyPublisher()
+        mock.ownBeaconInfoPublisher = Empty().eraseToAnyPublisher()
         mock.userID = "@alice:matrix.org"
         mock.loadDisplayNameReturnValue = "Alice"
         mock.timelineProxyForReturnValue = nil

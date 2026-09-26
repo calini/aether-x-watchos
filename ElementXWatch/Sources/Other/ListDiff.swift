@@ -7,7 +7,7 @@
 
 import MatrixRustSDK
 
-/// A platform-neutral form of the SDK's vector diffs (`RoomListEntriesUpdate`, `TimelineDiff`).
+/// A platform-neutral form of the SDK's vector diffs (`RoomListEntriesUpdate`, `TimelineDiff`, `LiveLocationShareUpdate`).
 enum ListDiff<Element> {
     case append([Element])
     case clear
@@ -41,6 +41,22 @@ extension ListDiff {
 
     init(_ diff: TimelineDiff, transform: (MatrixRustSDK.TimelineItem) -> Element) {
         switch diff {
+        case .append(let values): self = .append(values.map(transform))
+        case .clear: self = .clear
+        case .pushFront(let value): self = .pushFront(transform(value))
+        case .pushBack(let value): self = .pushBack(transform(value))
+        case .popFront: self = .popFront
+        case .popBack: self = .popBack
+        case .insert(let index, let value): self = .insert(index: Int(index), value: transform(value))
+        case .set(let index, let value): self = .set(index: Int(index), value: transform(value))
+        case .remove(let index): self = .remove(index: Int(index))
+        case .truncate(let length): self = .truncate(length: Int(length))
+        case .reset(let values): self = .reset(values.map(transform))
+        }
+    }
+
+    init(_ update: LiveLocationShareUpdate, transform: (LiveLocationShare) -> Element) {
+        switch update {
         case .append(let values): self = .append(values.map(transform))
         case .clear: self = .clear
         case .pushFront(let value): self = .pushFront(transform(value))

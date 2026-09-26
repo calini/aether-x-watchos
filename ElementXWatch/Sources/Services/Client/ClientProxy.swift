@@ -18,12 +18,14 @@ final class ClientProxy: ClientProxyProtocol {
     private let verificationStateSubject = CurrentValueSubject<SessionVerification, Never>(.unknown)
     private let actionsSubject = PassthroughSubject<ClientProxyAction, Never>()
     private let sendQueueErrorSubject = PassthroughSubject<Void, Never>()
+    private let ownBeaconInfoSubject = PassthroughSubject<OwnBeaconInfo, Never>()
 
     private var cancellables = Set<AnyCancellable>()
     private var syncStateHandle: TaskHandle?
     private var sendQueueStatusHandle: TaskHandle?
     private var verificationStateHandle: TaskHandle?
     private var delegateHandle: TaskHandle?
+    private var ownBeaconInfoHandle: TaskHandle?
 
     /// The SDK controller shares one delegate slot across every proxy built from it, so this is cached:
     /// a second proxy's `setDelegate` would silently steal callbacks from the first, and the first's
@@ -41,6 +43,7 @@ final class ClientProxy: ClientProxyProtocol {
     var syncStatePublisher: AnyPublisher<SyncState, Never> { syncStateSubject.removeDuplicates().eraseToAnyPublisher() }
     var verificationStatePublisher: AnyPublisher<SessionVerification, Never> { verificationStateSubject.removeDuplicates().eraseToAnyPublisher() }
     var actionsPublisher: AnyPublisher<ClientProxyAction, Never> { actionsSubject.eraseToAnyPublisher() }
+    var ownBeaconInfoPublisher: AnyPublisher<OwnBeaconInfo, Never> { ownBeaconInfoSubject.eraseToAnyPublisher() }
 
     private init(client: Client, syncService: SyncService) throws {
         self.client = client
@@ -66,6 +69,15 @@ final class ClientProxy: ClientProxyProtocol {
         })
         observeSendQueues()
 
+        do {
+            ownBeaconInfoHandle = try client.subscribeToOwnBeaconInfoUpdates(listener: SDKListener<BeaconInfoUpdate>.onMainActor { [weak self] update in
+                MXLog.info("Own beacon info in \(update.roomId): \(update.eventId) (live: \(update.live))")
+                self?.ownBeaconInfoSubject.send(OwnBeaconInfo(update))
+            })
+        } catch {
+            MXLog.error("Failed subscribing to own beacon info updates: \(error)")
+        }
+
         delegateHandle = try client.setDelegate(delegate: ClientDelegateForwarder { [weak self] isSoftLogout in
             MXLog.error("Received an auth error (soft logout: \(isSoftLogout))")
             self?.actionsSubject.send(.authError(isSoftLogout: isSoftLogout))
@@ -77,6 +89,7 @@ final class ClientProxy: ClientProxyProtocol {
         sendQueueStatusHandle?.cancel()
         verificationStateHandle?.cancel()
         delegateHandle?.cancel()
+        ownBeaconInfoHandle?.cancel()
     }
 
     static func make(client: Client) async throws -> ClientProxy {
@@ -131,6 +144,18 @@ final class ClientProxy: ClientProxyProtocol {
             }
         } catch {
             MXLog.error("Failed opening the timeline for \(roomID): \(error)")
+            return nil
+        }
+    }
+
+    func roomLocationProxy(for roomID: String) async -> RoomLocationProxyProtocol? {
+        do {
+            let room = try syncService.roomListService().room(roomId: roomID)
+            let proxy = RoomLocationProxy(room: room)
+            await proxy.start()
+            return proxy
+        } catch {
+            MXLog.error("Failed getting the room for location sharing in \(roomID): \(error)")
             return nil
         }
     }

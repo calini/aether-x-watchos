@@ -25,6 +25,7 @@ struct Setup {
         clientProxy.syncStatePublisher = syncState.eraseToAnyPublisher()
         clientProxy.verificationStatePublisher = verification.eraseToAnyPublisher()
         clientProxy.actionsPublisher = actions.eraseToAnyPublisher()
+        clientProxy.ownBeaconInfoPublisher = Empty().eraseToAnyPublisher()
         clientProxy.userID = "@me:example.org"
         clientProxy.loadDisplayNameReturnValue = "Me"
     }
