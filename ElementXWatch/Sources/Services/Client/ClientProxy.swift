@@ -25,6 +25,13 @@ final class ClientProxy: ClientProxyProtocol {
     private var verificationStateHandle: TaskHandle?
     private var delegateHandle: TaskHandle?
 
+    /// The SDK controller shares one delegate slot across every proxy built from it, so this is cached:
+    /// a second proxy's `setDelegate` would silently steal callbacks from the first, and the first's
+    /// `deinit` would then clear the second's delegate too.
+    private var sessionVerificationControllerProxy: SessionVerificationControllerProxyProtocol?
+    /// Serialises concurrent first calls onto the same fetch, so they can't each build a competing proxy.
+    private var sessionVerificationControllerTask: Task<SessionVerificationControllerProxyProtocol?, Never>?
+
     let userID: String
     let deviceID: String?
     let roomSummaryProvider: RoomSummaryProviderProtocol
@@ -127,12 +134,24 @@ final class ClientProxy: ClientProxyProtocol {
     }
 
     func sessionVerificationController() async -> SessionVerificationControllerProxyProtocol? {
-        do {
-            return try await SessionVerificationControllerProxy(controller: client.getSessionVerificationController())
-        } catch {
-            MXLog.error("Failed to get the session verification controller: \(error)")
-            return nil
+        if let sessionVerificationControllerProxy {
+            return sessionVerificationControllerProxy
         }
+
+        let task = sessionVerificationControllerTask ?? Task { [client] in
+            do {
+                return try await SessionVerificationControllerProxy(controller: client.getSessionVerificationController()) as SessionVerificationControllerProxyProtocol?
+            } catch {
+                MXLog.error("Failed to get the session verification controller: \(error)")
+                return nil
+            }
+        }
+        sessionVerificationControllerTask = task
+
+        let proxy = await task.value
+        sessionVerificationControllerProxy = proxy
+        sessionVerificationControllerTask = nil
+        return proxy
     }
 
     /// Any send error disables that room's send queue until it's re-enabled (mirrors iOS): on every
