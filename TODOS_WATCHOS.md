@@ -64,6 +64,40 @@ The old `watch` Cargo profile has moved out of the SDK. The `aws-lc-sys` build w
 - [ ] QR-code verification (needs FFI surface in the SDK).
 - [ ] Recovery-key entry.
 
+### Location sharing
+
+Watch these on the device first:
+- [ ] Tapping Stop within about 30 s of starting a share, then lowering the wrist, may only stop the share on the server late. The pending stop retry doesn't keep sync running by itself; if it shows up, have the service publish a `needsSync` that covers pending stops. The share still ends at its expiry.
+- [ ] Indoors, a one-off location request can fail straight away on a transient `locationUnknown` error when no live share is running.
+- [ ] Opening a chat waits for the room's live-location observer to load; check how long that takes on the device.
+
+Edge cases:
+- [ ] Location access revoked while a share is still starting isn't handled, only after it has started.
+- [ ] A same-room restart drops the old share's pending stop; if the new start then fails, the old share stays live until it expires.
+- [ ] Right after a restart, a narrow restore/start window can leave the old share live beside the new one until it expires.
+- [ ] The own-bubble Stop isn't matched to this watch's beacon, so it can stop the watch's share from a message sent by another device in the same room. Expose the beacon ID in `.sharing`.
+- [ ] A share confirmed late can wait up to 30 s extra before its first update.
+- [ ] A non-live own-beacon update doesn't end a pending stop's 30 s confirmation wait.
+- [ ] `LocationAuthorization` has no `.restricted` case.
+
+Polish:
+- [ ] The minute tick redraws the chat even when nothing is live.
+- [ ] The paused pill hides the time left.
+- [ ] The pill's backing is 0.9 opacity.
+- [ ] `RoundStopButtonStyle` and `SmallGlassButtonStyle` are near-duplicates.
+- [ ] The snapshot pin uses `UIColor.red` / `.white`, not Compound colours.
+- [ ] The Location sheet previews have no busy or error-alert state.
+- [ ] Tapping a failed own location opens the map instead of retrying.
+- [ ] A cached map coordinator outlives its screen.
+- [ ] An in-flight locate isn't cancelled when the sheet closes.
+- [ ] `WatchStrings.locationTitle` duplicates `WatchStrings.location`.
+
+Tests:
+- [ ] A test for a double tap while busy on every Location sheet action.
+- [ ] Unit tests for `RoomSummaryPreview` "📍 Location" / "📍 Live location".
+- [ ] The locale test mutates the global `setlocale`.
+- [ ] Other older `\(error)` logs in `ClientProxy` (media, timeline, logout).
+
 ### UI polish
 
 - [ ] The Verify sheet content goes blank while it animates away.
