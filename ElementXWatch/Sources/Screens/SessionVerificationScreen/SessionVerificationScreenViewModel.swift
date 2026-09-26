@@ -48,34 +48,62 @@ final class SessionVerificationScreenViewModel: SessionVerificationScreenViewMod
         }
     }
 
-    /// The SDK finishes/cancels the flow itself after a decline; that would otherwise clobber the declined message.
+    /// Gated on the expected step: the controller proxy is cached per client and shared across attempts
+    /// (no flow ID), so a stray or buffered action from an earlier attempt must not be misapplied to
+    /// whatever the screen shows now.
+    ///
+    /// Known limitation: without a flow ID, a stray `.cancelled`/`.failed` echo from a just-cancelled
+    /// attempt can still be misread as belonging to a fresh "Try again" if it arrives while that new
+    /// attempt is also in an active step.
     private func handle(_ action: SessionVerificationControllerProxyAction) {
         switch action {
         case .acceptedVerificationRequest:
-            guard let controllerProxy else { return }
+            guard let controllerProxy, state.step == .waitingForAcceptance else { return }
             perform(setting: .startingSas) { await controllerProxy.startSasVerification() }
         case .startedSasVerification:
             break
         case .receivedVerificationData(let data):
-            state.step = .comparing(data)
+            switch state.step {
+            case .waitingForAcceptance, .startingSas:
+                state.step = .comparing(data)
+            default:
+                break
+            }
         case .finished:
-            if state.step != .declined { state.step = .verified }
+            switch state.step {
+            case .comparing, .confirming:
+                state.step = .verified
+            default:
+                break
+            }
         case .cancelled:
-            if state.step != .declined { state.step = .cancelled }
+            guard isFlowActive else { return }
+            state.step = .cancelled
         case .failed:
+            guard isFlowActive else { return }
             state.step = .failed
         }
     }
 
-    /// Sets `step` and issues the call together, so the visible step always matches a call already in flight.
+    /// Whether the flow is still running, i.e. not idle and not already at a terminal step.
+    private var isFlowActive: Bool {
+        switch state.step {
+        case .intro, .verified, .declined, .cancelled, .failed:
+            false
+        case .waitingForAcceptance, .startingSas, .comparing, .confirming:
+            true
+        }
+    }
+
+    /// Sets `step` synchronously, then issues the call, so a step this call didn't set can never be
+    /// clobbered by its (possibly late) result.
     private func perform(setting step: SessionVerificationStep, _ call: @escaping () async -> Result<Void, SessionVerificationControllerProxyError>) {
+        state.step = step
         Task { [weak self] in
-            guard let self else { return }
-            state.step = step
-            // A failure after the user already declined or cancelled shouldn't override that outcome.
-            if case .failure = await call(), state.step != .declined, state.step != .cancelled {
-                state.step = .failed
-            }
+            guard let self, case .failure = await call() else { return }
+            // Only fail if nothing else has moved the step on since, and never override a final user choice.
+            guard state.step == step, step != .declined, step != .cancelled else { return }
+            state.step = .failed
         }
     }
 }

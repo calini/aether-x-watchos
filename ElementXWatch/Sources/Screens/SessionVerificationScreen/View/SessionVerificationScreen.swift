@@ -38,6 +38,7 @@ struct SessionVerificationScreen: View {
             Button(WatchStrings.theyDontMatch, role: .destructive) { context.send(viewAction: .noMatch) }
         case .confirming:
             ProgressView()
+            Button(WatchStrings.cancel) { context.send(viewAction: .cancel) }
         case .verified:
             Text(WatchStrings.verificationSucceeded).multilineTextAlignment(.center)
             Button(WatchStrings.done) { context.send(viewAction: .dismiss) }
@@ -81,6 +82,7 @@ struct SessionVerificationScreen_Previews: PreviewProvider {
         ("Waiting", .waitingForAcceptance),
         ("Emojis", .comparing(.emojis(emojis))),
         ("Decimals", .comparing(.decimals([1234, 5678, 9012]))),
+        ("Confirming", .confirming),
         ("Verified", .verified),
         ("Declined", .declined),
         ("Cancelled", .cancelled),

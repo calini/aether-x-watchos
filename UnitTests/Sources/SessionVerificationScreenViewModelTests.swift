@@ -17,35 +17,54 @@ struct SessionVerificationScreenViewModelTests {
         let emojis = [VerificationEmoji(symbol: "🐶", description: "Dog")]
 
         viewModel.context.send(viewAction: .start)
-        try await waitUntil { viewModel.context.viewState.step == .waitingForAcceptance }
-        #expect(proxy.requestDeviceVerificationCallsCount == 1)
+        #expect(viewModel.context.viewState.step == .waitingForAcceptance)
+        try await waitUntil { proxy.requestDeviceVerificationCallsCount == 1 }
 
         actions.send(.acceptedVerificationRequest)
         try await waitUntil { proxy.startSasVerificationCallsCount == 1 }
 
         actions.send(.receivedVerificationData(.emojis(emojis)))
-        try await waitUntil { viewModel.context.viewState.step == .comparing(.emojis(emojis)) }
+        #expect(viewModel.context.viewState.step == .comparing(.emojis(emojis)))
 
         viewModel.context.send(viewAction: .match)
-        try await waitUntil { proxy.approveVerificationCallsCount == 1 }
         #expect(viewModel.context.viewState.step == .confirming)
+        try await waitUntil { proxy.approveVerificationCallsCount == 1 }
 
         actions.send(.finished)
-        try await waitUntil { viewModel.context.viewState.step == .verified }
+        #expect(viewModel.context.viewState.step == .verified)
     }
 
     @Test
     func noMatchDeclines() async throws {
         let (viewModel, proxy, actions) = makeViewModel()
         viewModel.context.send(viewAction: .start)
+        try await waitUntil { proxy.requestDeviceVerificationCallsCount == 1 }
         actions.send(.acceptedVerificationRequest)
+        try await waitUntil { proxy.startSasVerificationCallsCount == 1 }
         actions.send(.receivedVerificationData(.decimals([1, 2, 3])))
-        try await waitUntil { viewModel.context.viewState.step == .comparing(.decimals([1, 2, 3])) }
+        #expect(viewModel.context.viewState.step == .comparing(.decimals([1, 2, 3])))
 
         viewModel.context.send(viewAction: .noMatch)
+        #expect(viewModel.context.viewState.step == .declined)
 
-        try await waitUntil { viewModel.context.viewState.step == .declined }
-        #expect(proxy.declineVerificationCallsCount == 1)
+        try await waitUntil { proxy.declineVerificationCallsCount == 1 }
+    }
+
+    /// Regression test: `SDKListener.onMainActor` can deliver several buffered proxy actions back-to-back
+    /// on one main-actor turn, before the `startSasVerification` call started by the first of them has
+    /// even returned. The screen must still land on `.comparing`, not have that call's completion (or
+    /// failure) clobber a step it no longer set.
+    @Test
+    func backToBackAcceptedAndDataDoesNotLoseComparingStep() async throws {
+        let (viewModel, _, actions) = makeViewModel()
+        let emojis = [VerificationEmoji(symbol: "🐶", description: "Dog")]
+
+        viewModel.context.send(viewAction: .start)
+        actions.send(.acceptedVerificationRequest)
+        actions.send(.receivedVerificationData(.emojis(emojis)))
+        await Task.yield()
+
+        #expect(viewModel.context.viewState.step == .comparing(.emojis(emojis)))
     }
 
     @Test
@@ -90,11 +109,59 @@ struct SessionVerificationScreenViewModelTests {
         try await waitUntil { viewModel.context.viewState.step == .waitingForAcceptance }
 
         viewModel.context.send(viewAction: .cancel)
+        #expect(viewModel.context.viewState.step == .cancelled)
         try await waitUntil { proxy.cancelVerificationCallsCount == 1 }
         viewModel.context.send(viewAction: .dismiss)
 
         #expect(dismissed)
         cancellable.cancel()
+    }
+
+    @Test
+    func cancelDuringConfirmingCallsCancelVerification() async throws {
+        let (viewModel, proxy, actions) = makeViewModel()
+        viewModel.context.send(viewAction: .start)
+        actions.send(.acceptedVerificationRequest)
+        actions.send(.receivedVerificationData(.decimals([1, 2, 3])))
+        viewModel.context.send(viewAction: .match)
+        #expect(viewModel.context.viewState.step == .confirming)
+
+        viewModel.context.send(viewAction: .cancel)
+
+        #expect(viewModel.context.viewState.step == .cancelled)
+        try await waitUntil { proxy.cancelVerificationCallsCount == 1 }
+    }
+
+    /// Buffered/shared-proxy actions must be gated on the current step: a stray `.cancelled` for a
+    /// finished flow (e.g. a delayed echo) must not undo `.verified`.
+    @Test
+    func strayCancelledAfterVerifiedIsIgnored() async throws {
+        let (viewModel, _, actions) = makeViewModel()
+        viewModel.context.send(viewAction: .start)
+        actions.send(.acceptedVerificationRequest)
+        actions.send(.receivedVerificationData(.decimals([1, 2, 3])))
+        viewModel.context.send(viewAction: .match)
+        actions.send(.finished)
+        #expect(viewModel.context.viewState.step == .verified)
+
+        actions.send(.cancelled)
+
+        #expect(viewModel.context.viewState.step == .verified)
+    }
+
+    /// A previous attempt's `.acceptedVerificationRequest` arriving after the user cancelled it must not
+    /// start a new SAS verification.
+    @Test
+    func acceptedRequestWhileCancelledDoesNotStartSas() async throws {
+        let (viewModel, proxy, actions) = makeViewModel()
+        viewModel.context.send(viewAction: .start)
+        viewModel.context.send(viewAction: .cancel)
+        #expect(viewModel.context.viewState.step == .cancelled)
+
+        actions.send(.acceptedVerificationRequest)
+
+        #expect(viewModel.context.viewState.step == .cancelled)
+        #expect(proxy.startSasVerificationCallsCount == 0)
     }
 
     // MARK: - Helpers
