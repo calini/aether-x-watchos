@@ -117,12 +117,18 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
 
     func login(username: String, password: String) async -> Result<ClientProxyProtocol, AuthenticationError> {
         guard let pending = pendingLogin else { return .failure(.unknown) }
+        let myGeneration = generation
 
         do {
             try await pending.client.login(username: username, password: password, initialDeviceName: Self.deviceName, deviceId: nil)
         } catch {
             MXLog.error("Password login failed: \(type(of: error))")
             return .failure(AuthenticationError(loginError: error))
+        }
+        guard myGeneration == generation else {
+            // reset() or configure() ran meanwhile and deleted this client's directories: don't save a broken session.
+            await Self.logOutAbandoned(pending.client)
+            return .failure(.unknown)
         }
 
         return await finishLogin(pending)
@@ -219,12 +225,12 @@ final class AuthenticationService: AuthenticationServiceProtocol, QRLoginService
 
     /// Best-effort: runs in its own task so the caller's cancellation doesn't cancel the request too.
     private static func logOutAbandoned(_ client: Client) async {
-        MXLog.info("QR login cancelled after approval, signing the new device out")
+        MXLog.info("Sign-in abandoned after the device was created, signing it out")
         await Task {
             do {
                 try await client.logout()
             } catch {
-                MXLog.error("Signing out the abandoned QR login device failed: \(error)")
+                MXLog.error("Signing out the abandoned device failed: \(error)")
             }
         }.value
     }

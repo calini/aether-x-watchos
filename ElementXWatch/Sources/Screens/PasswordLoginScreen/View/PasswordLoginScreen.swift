@@ -34,6 +34,8 @@ struct PasswordLoginScreen: View {
             .disabled(context.viewState.isLoading)
         }
         .navigationTitle(WatchStrings.signInMethodTitle)
+        // Backing out mid-sign-in would reset the login client the request is still using.
+        .navigationBarBackButtonHidden(context.viewState.isLoading)
     }
 }
 

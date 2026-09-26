@@ -35,7 +35,11 @@ final class AuthenticationFlowCoordinator: CoordinatorProtocol {
     private var methodCoordinator: LoginMethodScreenCoordinator?
     private var passwordCoordinator: PasswordLoginScreenCoordinator?
     private var qrCoordinator: QRLoginScreenCoordinator?
-    private var cancellables = Set<AnyCancellable>()
+    private var serverCancellable: AnyCancellable?
+    // Each child's subscription lives and dies with it, so a dropped screen's late result is ignored.
+    private var methodCancellable: AnyCancellable?
+    private var passwordCancellable: AnyCancellable?
+    private var qrCancellable: AnyCancellable?
 
     var signedInPublisher: AnyPublisher<SignedIn, Never> {
         signedInSubject.eraseToAnyPublisher()
@@ -67,13 +71,12 @@ final class AuthenticationFlowCoordinator: CoordinatorProtocol {
     }
 
     func start() {
-        serverCoordinator.actionsPublisher
+        serverCancellable = serverCoordinator.actionsPublisher
             .sink { [weak self] action in
                 switch action {
                 case .configured(let options): self?.showMethods(options)
                 }
             }
-            .store(in: &cancellables)
     }
 
     func toPresentable() -> AnyView {
@@ -85,61 +88,64 @@ final class AuthenticationFlowCoordinator: CoordinatorProtocol {
 
     /// Drops coordinators whose routes left the stack; backing out to the server screen also resets the pending login.
     func handlePathChange(_ path: [AuthenticationRoute]) {
-        guard !path.isEmpty else {
-            methodCoordinator = nil
-            passwordCoordinator = nil
-            qrCoordinator = nil
-            authenticationService.reset()
-            return
-        }
-
         if !path.contains(where: \.isPassword) {
             passwordCoordinator = nil
+            passwordCancellable = nil
         }
         if !path.contains(.qrCode) {
-            qrCoordinator = nil
+            dropQRCode()
+        }
+        if path.isEmpty {
+            methodCoordinator = nil
+            methodCancellable = nil
+            authenticationService.reset()
         }
     }
 
     func showPassword(serverName: String) {
         let coordinator = PasswordLoginScreenCoordinator(serverName: serverName, authenticationService: authenticationService)
-        coordinator.actionsPublisher
+        passwordCancellable = coordinator.actionsPublisher
             .sink { [weak self] action in
                 switch action {
                 case .signedIn(let clientProxy): self?.signedInSubject.send(SignedIn(clientProxy: clientProxy, needsVerification: true))
                 }
             }
-            .store(in: &cancellables)
         passwordCoordinator = coordinator
         navigation.path.append(.password(serverName: serverName))
     }
 
     /// Runs on the configured server: the service signs in with the pending login.
     func showQRCode() {
+        dropQRCode()
         let coordinator = QRLoginScreenCoordinator(qrLoginService: qrLoginService)
-        coordinator.actionsPublisher
+        qrCancellable = coordinator.actionsPublisher
             .sink { [weak self] action in
                 switch action {
                 case .signedIn(let clientProxy): self?.signedInSubject.send(SignedIn(clientProxy: clientProxy, needsVerification: false))
                 }
             }
-            .store(in: &cancellables)
         qrCoordinator = coordinator
         navigation.path.append(.qrCode)
     }
 
     private func showMethods(_ options: LoginOptions) {
         let coordinator = LoginMethodScreenCoordinator(options: options)
-        coordinator.actionsPublisher
+        methodCancellable = coordinator.actionsPublisher
             .sink { [weak self] action in
                 switch action {
                 case .password: self?.showPassword(serverName: options.serverName)
                 case .qrCode: self?.showQRCode()
                 }
             }
-            .store(in: &cancellables)
         methodCoordinator = coordinator
         navigation.path = [.method(options)]
+    }
+
+    /// The service owns an in-flight QR login's session files, so it must be stopped, not just dropped.
+    private func dropQRCode() {
+        qrCoordinator?.context.send(viewAction: .cancel)
+        qrCoordinator = nil
+        qrCancellable = nil
     }
 
     private func destination(for route: AuthenticationRoute) -> AnyView {
