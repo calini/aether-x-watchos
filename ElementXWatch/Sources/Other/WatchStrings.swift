@@ -38,6 +38,14 @@ nonisolated enum WatchStrings {
     static let rateLimited = "Too many attempts. Try again later."
     static let signInFailed = "Couldn't sign in. Try again."
 
+    static let serverTitle = "Server"
+    static let serverPrompt = "Your server"
+    static let continueAction = "Continue"
+    static let signInMethodTitle = "Sign in"
+    static let signInWithPassword = "Sign in with password"
+    static let signInWithIPhone = "Sign in with iPhone"
+    static let noSignInMethods = "This server doesn't support signing in from a watch."
+
     static let signInTitle = "Sign in with your iPhone"
     static let signInInstructions = "On your iPhone open Element X → Settings → Link new device → Link desktop computer, then scan the code."
     static let signInStart = "Show code"
