@@ -45,6 +45,9 @@ nonisolated enum WatchStrings {
     static let signInWithPassword = "Sign in with password"
     static let signInWithIPhone = "Sign in with iPhone"
     static let noSignInMethods = "This server doesn't support signing in from a watch."
+    static let usernamePrompt = "Username"
+    static let passwordPrompt = "Password"
+    static let signInAction = "Sign in"
 
     static let signInTitle = "Sign in with your iPhone"
     static let signInInstructions = "On your iPhone open Element X → Settings → Link new device → Link desktop computer, then scan the code."
