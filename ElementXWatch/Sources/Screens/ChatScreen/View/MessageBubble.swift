@@ -33,16 +33,16 @@ struct MessageBubble: View {
         VStack(alignment: .leading, spacing: 4) {
             if let reply = item.replyTo {
                 VStack(alignment: .leading) {
-                    Text(reply.senderName).font(.caption2.bold())
-                    Text(reply.text).font(.caption2).lineLimit(2)
+                    Text(reply.senderName).font(.caption2.bold()).foregroundStyle(Color.compound.textPrimary)
+                    Text(reply.text).font(.caption2).lineLimit(2).foregroundStyle(Color.compound.textSecondary)
                 }
                 .padding(4)
-                .background(Color.compound.bgSubtleSecondary, in: RoundedRectangle(cornerRadius: 6))
+                .background(Color.compound.bgCanvasDefault, in: RoundedRectangle(cornerRadius: 6))
             }
             content
         }
         .padding(8)
-        .background(item.isOwn ? Color.compound.bgAccentRest.opacity(0.35) : Color.compound.bgSubtlePrimary,
+        .background(item.isOwn ? Color.compound.bgBubbleOutgoing : Color.compound.bgBubbleIncoming,
                     in: RoundedRectangle(cornerRadius: 12))
         .opacity(item.sendState == .sent ? 1 : 0.6)
     }

@@ -21,3 +21,10 @@ extension Image {
 
     private static let compoundIcons = CompoundIcons()
 }
+
+extension CompoundColorTokens {
+    /// Other people's message bubbles. Matches `_bgBubbleIncoming` in compound-ios (dark).
+    var bgBubbleIncoming: Color { CompoundCoreColorTokens.gray400 }
+    /// Your own message bubbles. Matches `_bgBubbleOutgoing` in compound-ios (dark).
+    var bgBubbleOutgoing: Color { CompoundCoreColorTokens.gray500 }
+}
