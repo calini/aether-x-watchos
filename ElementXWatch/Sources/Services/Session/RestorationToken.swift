@@ -21,6 +21,10 @@ nonisolated struct RestorationToken: Equatable {
 
     enum CodingKeys: CodingKey {
         case session
+        /// Directory names only: the app container's absolute path can change on reinstall or update.
+        case sessionDirectoryName
+        case cacheDirectoryName
+        /// Legacy absolute URLs, decoded for older tokens.
         case sessionDirectory
         case cacheDirectory
         case passphrase
@@ -33,13 +37,15 @@ nonisolated extension RestorationToken: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         let session = try container.decode(Session.self, forKey: .session)
-        let dataDirectory = try container.decode(URL.self, forKey: .sessionDirectory)
-        let cacheDirectory = try container.decodeIfPresent(URL.self, forKey: .cacheDirectory)
+        let dataDirectoryName = try container.decodeIfPresent(String.self, forKey: .sessionDirectoryName)
+            ?? container.decode(URL.self, forKey: .sessionDirectory).lastPathComponent
+        let cacheDirectoryName = try container.decodeIfPresent(String.self, forKey: .cacheDirectoryName)
+            ?? container.decodeIfPresent(URL.self, forKey: .cacheDirectory)?.lastPathComponent
 
-        guard let cacheDirectory else {
+        guard let cacheDirectoryName else {
             throw DecodingError.dataCorruptedError(forKey: .cacheDirectory, in: container, debugDescription: "Missing cache directory.")
         }
-        let sessionDirectories = SessionDirectories(dataDirectory: dataDirectory, cacheDirectory: cacheDirectory)
+        let sessionDirectories = SessionDirectories(dataDirectoryName: dataDirectoryName, cacheDirectoryName: cacheDirectoryName)
 
         let base64Passphrase = try container.decode(String.self, forKey: .passphrase)
         guard let passphrase = Data(base64Encoded: base64Passphrase) else {
@@ -55,8 +61,8 @@ nonisolated extension RestorationToken: Codable {
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(session, forKey: .session)
-        try container.encode(sessionDirectories.dataDirectory, forKey: .sessionDirectory)
-        try container.encode(sessionDirectories.cacheDirectory, forKey: .cacheDirectory)
+        try container.encode(sessionDirectories.dataDirectory.lastPathComponent, forKey: .sessionDirectoryName)
+        try container.encode(sessionDirectories.cacheDirectory.lastPathComponent, forKey: .cacheDirectoryName)
         try container.encode(passphrase.base64EncodedString(), forKey: .passphrase)
         try container.encode(pusherNotificationClientIdentifier, forKey: .pusherNotificationClientIdentifier)
     }

@@ -24,8 +24,9 @@ nonisolated final class SessionDelegate: ClientSessionDelegate {
     }
 
     func saveSessionInKeychain(session: Session) {
-        guard let token = keychainStore.restorationToken() else {
-            // The initial save happens after login via SessionStore; nothing to refresh yet.
+        // The initial save happens after login via SessionStore; nothing to refresh yet.
+        // Another user's token must never be overwritten with this session.
+        guard let token = keychainStore.restorationToken(), token.session.userId == session.userId else {
             return
         }
         MXLog.info("Saving refreshed session for \(session.userId)")

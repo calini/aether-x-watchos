@@ -51,4 +51,17 @@ struct SessionDelegateTests {
         #expect(stored.sessionDirectories == original.sessionDirectories)
         #expect(stored.passphrase == original.passphrase)
     }
+
+    @Test
+    func anotherUsersRefreshedSessionDoesNotOverwriteTheStoredToken() throws {
+        let keychain = KeychainStore(service: "tests.\(UUID().uuidString)")
+        let original = try makeToken(withCryptoStore: false)
+        keychain.setRestorationToken(original)
+        let delegate = SessionDelegate(keychainStore: keychain)
+        let other = try makeToken(withCryptoStore: false, userID: "@mallory:example.org")
+
+        delegate.saveSessionInKeychain(session: other.session)
+
+        #expect(keychain.restorationToken() == original)
+    }
 }

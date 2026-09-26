@@ -53,8 +53,13 @@ nonisolated extension SessionDirectories {
     /// Creates a fresh set of session directories for a new user.
     init() {
         let sessionDirectoryName = UUID().uuidString
-        dataDirectory = .sessionsBaseDirectory.appending(component: sessionDirectoryName)
-        cacheDirectory = .sessionCachesBaseDirectory.appending(component: sessionDirectoryName)
+        self.init(dataDirectoryName: sessionDirectoryName, cacheDirectoryName: sessionDirectoryName)
+    }
+
+    /// Resolves stored directory names against the current container's base directories.
+    init(dataDirectoryName: String, cacheDirectoryName: String) {
+        dataDirectory = .sessionsBaseDirectory.appending(component: dataDirectoryName)
+        cacheDirectory = .sessionCachesBaseDirectory.appending(component: cacheDirectoryName)
     }
 }
 

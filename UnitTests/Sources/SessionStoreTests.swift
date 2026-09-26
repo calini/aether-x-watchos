@@ -67,7 +67,45 @@ struct SessionStoreTests {
         #expect(keychain.restorationToken() == nil)
     }
 
+    @Test
+    func tokenStoresDirectoryNamesResolvedAgainstTheCurrentContainer() throws {
+        let token = try makeToken(withCryptoStore: false)
+
+        let data = try JSONEncoder().encode(token)
+        let decoded = try JSONDecoder().decode(RestorationToken.self, from: data)
+
+        #expect(!String(decoding: data, as: UTF8.self).contains("Sessions"))
+        #expect(decoded == token)
+        #expect(decoded.sessionDirectories.dataDirectory.deletingLastPathComponent() == URL.sessionsBaseDirectory)
+        #expect(decoded.sessionDirectories.cacheDirectory.deletingLastPathComponent() == URL.sessionCachesBaseDirectory)
+    }
+
+    @Test
+    func legacyTokenWithAbsolutePathsFromAnotherContainerResolvesToTheCurrentOne() throws {
+        let token = try makeToken(withCryptoStore: false)
+        let oldContainer = URL(filePath: "/private/var/mobile/Containers/Data/Application/OLD-CONTAINER/Library")
+        let legacy = LegacyRestorationToken(session: token.session,
+                                            sessionDirectory: oldContainer.appending(path: "Application Support/Sessions/ABC"),
+                                            cacheDirectory: oldContainer.appending(path: "Caches/Sessions/ABC"),
+                                            passphrase: token.passphrase.base64EncodedString())
+
+        let decoded = try JSONDecoder().decode(RestorationToken.self, from: JSONEncoder().encode(legacy))
+
+        #expect(decoded.sessionDirectories == SessionDirectories(dataDirectoryName: "ABC", cacheDirectoryName: "ABC"))
+        #expect(decoded.sessionDirectories.dataDirectory == URL.sessionsBaseDirectory.appending(component: "ABC"))
+        #expect(decoded.sessionDirectories.cacheDirectory == URL.sessionCachesBaseDirectory.appending(component: "ABC"))
+        #expect(decoded.passphrase == token.passphrase)
+    }
+
     // MARK: - Helpers
+
+    /// The token format from before directory names were stored instead of absolute URLs.
+    private struct LegacyRestorationToken: Encodable {
+        let session: Session
+        let sessionDirectory: URL
+        let cacheDirectory: URL
+        let passphrase: String
+    }
 
     private func makeStore() -> (SessionStore, KeychainStore) {
         let keychain = KeychainStore(service: "tests.\(UUID().uuidString)")

@@ -35,7 +35,8 @@ final class UserSessionRestorer: UserSessionRestorerProtocol {
             return try await .success(ClientProxy.make(client: client))
         } catch {
             // Restoring is local (no discovery); a failure means the stored data is unusable.
-            MXLog.error("Failed restoring the session: \(error)")
+            // Only the error type: enough to recognise a wrongful wipe on device, and never carries secrets.
+            MXLog.error("Failed restoring the session with \(String(reflecting: type(of: error))), clearing it")
             sessionStore.clear()
             return .failure(.restoreFailed)
         }
