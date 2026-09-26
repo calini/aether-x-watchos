@@ -17,6 +17,14 @@ struct Setup {
     let verification = CurrentValueSubject<SessionVerification, Never>(.verified)
     let actions = PassthroughSubject<ClientProxyAction, Never>()
     let clientProxy = ClientProxyMock()
+    let locationProvider = LocationProviderMock()
+    let liveLocationService = LiveLocationServiceMock()
+    /// Whether each `makeLocationServices` call came before sync started.
+    let locationServicesMadeBeforeSync = Recorder<Bool>()
+
+    var locationServices: LocationServices {
+        LocationServices(locationProvider: locationProvider, liveLocationService: liveLocationService)
+    }
 
     init() {
         let provider = RoomSummaryProviderMock()
@@ -28,7 +36,16 @@ struct Setup {
         clientProxy.ownBeaconInfoPublisher = Empty().eraseToAnyPublisher()
         clientProxy.userID = "@me:example.org"
         clientProxy.loadDisplayNameReturnValue = "Me"
+        locationProvider.authorization = .authorized
+        locationProvider.authorizationPublisher = Just(.authorized).eraseToAnyPublisher()
+        liveLocationService.state = .idle
+        liveLocationService.statePublisher = Just(.idle).eraseToAnyPublisher()
     }
+}
+
+/// Collects values from closures that can't mutate the test's own state.
+final class Recorder<Value> {
+    var values: [Value] = []
 }
 
 extension SessionVerificationControllerProxyMock {

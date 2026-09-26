@@ -12,6 +12,8 @@ struct ChatScreen: View {
     @Bindable var context: ChatScreenViewModel.Context
     /// Supplied by the coordinator, which owns the map screen.
     let locationMap: (LocationMapPresentation) -> AnyView
+    /// Supplied by the coordinator, which owns the (+) sheet.
+    let attachments: (AttachmentsPresentation) -> AnyView
 
     var body: some View {
         ScrollView {
@@ -30,6 +32,9 @@ struct ChatScreen: View {
             MessageActionsSheet(item: item,
                                  onReact: { context.send(viewAction: .react(key: $0, item: item)) },
                                  onReply: { context.send(viewAction: .reply(item)) })
+        }
+        .sheet(item: $context.attachments) { presentation in
+            attachments(presentation)
         }
         .fullScreenCover(item: $context.locationMap) { presentation in
             locationMap(presentation)
@@ -98,12 +103,19 @@ struct ChatScreen: View {
                         .accessibilityLabel(WatchStrings.cancel)
                 }
             }
-            TextFieldLink(prompt: Text(WatchStrings.reply)) {
-                Label(WatchStrings.reply, systemImage: "arrowshape.turn.up.left.fill")
-            } onSubmit: { text in
-                context.send(viewAction: .send(text))
+            HStack(spacing: 6) {
+                Button { context.send(viewAction: .showAttachments) } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(RoundGlassButtonStyle())
+                .accessibilityLabel(WatchStrings.attachments)
+                TextFieldLink(prompt: Text(WatchStrings.reply)) {
+                    Label(WatchStrings.reply, systemImage: "arrowshape.turn.up.left.fill")
+                } onSubmit: { text in
+                    context.send(viewAction: .send(text))
+                }
+                .buttonStyle(.fullWidth)
             }
-            .buttonStyle(.fullWidth)
         }
         .padding(.top, 4)
     }
@@ -111,6 +123,31 @@ struct ChatScreen: View {
     private var isShowingError: Binding<Bool> {
         Binding(get: { context.viewState.bindings.errorMessage != nil },
                 set: { if !$0 { context.send(viewAction: .dismissError) } })
+    }
+}
+
+/// A small round button beside the full-width capsules: Liquid Glass on watchOS 26, a tinted circle before that.
+private struct RoundGlassButtonStyle: ButtonStyle {
+    private static let size: CGFloat = 44
+
+    func makeBody(configuration: Configuration) -> some View {
+        if #available(watchOS 26, *) {
+            label(configuration)
+                .foregroundStyle(Color.compound.textPrimary)
+                .glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            label(configuration)
+                .foregroundStyle(Color.compound.bgAccentRest)
+                .background(Color.compound.bgAccentRest.opacity(0.25), in: Circle())
+                .opacity(configuration.isPressed ? 0.6 : 1)
+        }
+    }
+
+    private func label(_ configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .frame(width: Self.size, height: Self.size)
+            .contentShape(Circle())
     }
 }
 
@@ -197,7 +234,7 @@ struct ChatScreen_Previews: PreviewProvider {
     }
 
     static func screen(_ viewModel: ChatScreenViewModel) -> some View {
-        NavigationStack { ChatScreen(context: viewModel.context) { _ in AnyView(EmptyView()) } }
+        NavigationStack { ChatScreen(context: viewModel.context, locationMap: { _ in AnyView(EmptyView()) }, attachments: { _ in AnyView(EmptyView()) }) }
     }
 
     static func makeItem(_ id: String, _ text: String, own: Bool, body: TimelineItemBody? = nil,

@@ -105,6 +105,25 @@ nonisolated enum WatchStrings {
     static let ok = "OK"
     static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
 
+    static let attachments = "Attachments"
+    static let attachmentsTitle = "Attach"
+    static let locationTitle = "Location"
+    static let locationRow = "📍 Location"
+    static let sendCurrentLocation = "Send current location"
+    static let shareLive15 = "Share live · 15 min"
+    static let shareLive60 = "Share live · 1 hour"
+    static let findingLocation = "Finding your location…"
+    static let locationFailed = "Couldn't get your location."
+    static let locationAccessOff = "Location access is off. Turn it on in Settings → Privacy & Security → Location Services."
+    static let sendLocationFailed = "Couldn't send location."
+    static let startLiveFailed = "Couldn't start live location."
+    static let shareHere = "Share here"
+    static let anotherChat = "another chat"
+
+    static func replaceLiveShareTitle(roomName: String) -> String {
+        "Stop sharing in \(roomName) and share here instead?"
+    }
+
     /// "Live · updated 30 s ago", rounded down to seconds, minutes or hours.
     static func liveUpdated(secondsAgo: Int) -> String {
         let seconds = max(secondsAgo, 0)

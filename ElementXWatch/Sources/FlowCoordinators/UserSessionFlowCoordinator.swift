@@ -26,6 +26,7 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
     }
 
     private let clientProxy: ClientProxyProtocol
+    private let locationServices: LocationServices
     private let showsVerificationOnStart: Bool
     private let chatsCoordinator: ChatsScreenCoordinator
     private let navigation = Navigation()
@@ -33,6 +34,8 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
     private let mapSnapshotLoader = MapSnapshotLoader()
     private let actionsSubject = PassthroughSubject<UserSessionFlowCoordinatorAction, Never>()
     private var childCoordinators: [UserSessionRoute: CoordinatorProtocol] = [:]
+    /// Names the room a live share runs in, when asking to replace it from another chat.
+    private var roomNames: [String: String] = [:]
     private var cancellables = Set<AnyCancellable>()
     // Lives and dies with the presented verification, so a dismissed screen's late action is ignored.
     private var verificationCancellable: AnyCancellable?
@@ -51,8 +54,9 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         navigation.verification?.context
     }
 
-    init(clientProxy: ClientProxyProtocol, showsVerificationOnStart: Bool = false) {
+    init(clientProxy: ClientProxyProtocol, locationServices: LocationServices, showsVerificationOnStart: Bool = false) {
         self.clientProxy = clientProxy
+        self.locationServices = locationServices
         self.showsVerificationOnStart = showsVerificationOnStart
         chatsCoordinator = ChatsScreenCoordinator(clientProxy: clientProxy)
     }
@@ -66,6 +70,12 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
                 case .openSettings:
                     self?.navigation.path.append(.settings)
                 }
+            }
+            .store(in: &cancellables)
+
+        clientProxy.roomSummaryProvider.roomsPublisher
+            .sink { [weak self] rooms in
+                self?.roomNames = Dictionary(rooms.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
             }
             .store(in: &cancellables)
 
@@ -120,7 +130,9 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         let coordinator: CoordinatorProtocol
         switch route {
         case .chat(let roomID, let name, let isDirect):
-            coordinator = ChatLoaderCoordinator(roomID: roomID, name: name, isDirect: isDirect, clientProxy: clientProxy)
+            coordinator = ChatLoaderCoordinator(roomID: roomID, name: name, isDirect: isDirect, clientProxy: clientProxy,
+                                                locationServices: locationServices, mapSnapshotLoader: mapSnapshotLoader,
+                                                roomName: { [weak self] in self?.roomNames[$0] })
         case .settings:
             let settings = SettingsScreenCoordinator(clientProxy: clientProxy)
             settings.actionsPublisher
@@ -184,22 +196,35 @@ private final class ChatLoaderCoordinator: CoordinatorProtocol {
     private let name: String
     private let isDirect: Bool
     private let clientProxy: ClientProxyProtocol
+    private let locationServices: LocationServices
+    private let mapSnapshotLoader: MapSnapshotLoaderProtocol
+    private let roomName: (String) -> String?
     private let model = Model()
 
-    init(roomID: String, name: String, isDirect: Bool, clientProxy: ClientProxyProtocol) {
+    init(roomID: String, name: String, isDirect: Bool, clientProxy: ClientProxyProtocol,
+         locationServices: LocationServices, mapSnapshotLoader: MapSnapshotLoaderProtocol, roomName: @escaping (String) -> String?) {
         self.roomID = roomID
         self.name = name
         self.isDirect = isDirect
         self.clientProxy = clientProxy
+        self.locationServices = locationServices
+        self.mapSnapshotLoader = mapSnapshotLoader
+        self.roomName = roomName
     }
 
     func start() {
-        Task { [model, roomID, name, isDirect, clientProxy] in
+        Task { [model, roomID, name, isDirect, clientProxy, locationServices, mapSnapshotLoader, roomName] in
             // The chat holds this one proxy: every call builds a new observer of the room's live shares.
             async let roomLocationProxy = clientProxy.roomLocationProxy(for: roomID)
             if let timelineProxy = await clientProxy.timelineProxy(for: roomID) {
-                model.chat = await ChatScreenCoordinator(roomName: name, isDirect: isDirect, timelineProxy: timelineProxy,
-                                                         roomLocationProxy: roomLocationProxy)
+                model.chat = await ChatScreenCoordinator(parameters: .init(roomID: roomID,
+                                                                           roomName: name,
+                                                                           isDirect: isDirect,
+                                                                           timelineProxy: timelineProxy,
+                                                                           roomLocationProxy: roomLocationProxy,
+                                                                           locationServices: locationServices,
+                                                                           mapSnapshotLoader: mapSnapshotLoader,
+                                                                           roomNameForID: roomName))
             } else {
                 model.failed = true
             }

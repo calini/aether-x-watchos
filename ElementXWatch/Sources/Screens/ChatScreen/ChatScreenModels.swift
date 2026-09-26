@@ -53,6 +53,11 @@ struct LocationMapPresentation: Identifiable {
     let mode: LocationMapScreenMode
 }
 
+/// Each presentation gets its own ID, so reopening the (+) sheet starts afresh.
+struct AttachmentsPresentation: Identifiable {
+    let id = UUID()
+}
+
 /// A message that failed to enqueue, remembered so `.retryDraft` can resend the same text.
 struct ChatDraft: Equatable {
     let text: String
@@ -64,6 +69,7 @@ struct ChatScreenBindings {
     var actionsItem: EventItem?
     var errorMessage: String?
     var locationMap: LocationMapPresentation?
+    var attachments: AttachmentsPresentation?
 }
 
 enum ChatScreenViewAction {
@@ -72,6 +78,7 @@ enum ChatScreenViewAction {
     case send(String)
     case showActions(EventItem)
     case showLocation(EventItem)
+    case showAttachments
     case reply(EventItem)
     case cancelReply
     case react(key: String, item: EventItem)

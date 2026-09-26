@@ -23,7 +23,12 @@ import SwiftUI
     @ObservationIgnored private let restorer: UserSessionRestorerProtocol
     @ObservationIgnored private let authenticationService: AuthenticationServiceProtocol
     @ObservationIgnored private let qrLoginService: QRLoginServiceProtocol
+    @ObservationIgnored private let makeLocationServices: @MainActor (ClientProxyProtocol) -> LocationServices
     @ObservationIgnored private var clientProxy: ClientProxyProtocol?
+    /// Owned here rather than by the session's flow: built before sync starts, and stopped before logging out.
+    @ObservationIgnored private var locationServices: LocationServices?
+    @ObservationIgnored private var liveLocationRestoreCancellable: AnyCancellable?
+    @ObservationIgnored private var liveLocationRestoreTask: Task<Void, Never>?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var isActive = false
     @ObservationIgnored private var isStarting = false
@@ -45,11 +50,13 @@ import SwiftUI
     init(sessionStore: SessionStoreProtocol,
          restorer: UserSessionRestorerProtocol,
          authenticationService: AuthenticationServiceProtocol,
-         qrLoginService: QRLoginServiceProtocol) {
+         qrLoginService: QRLoginServiceProtocol,
+         makeLocationServices: @escaping @MainActor (ClientProxyProtocol) -> LocationServices = LocationServices.live(for:)) {
         self.sessionStore = sessionStore
         self.restorer = restorer
         self.authenticationService = authenticationService
         self.qrLoginService = qrLoginService
+        self.makeLocationServices = makeLocationServices
     }
 
     func start() async {
@@ -75,6 +82,8 @@ import SwiftUI
         defer { isSigningOut = false }
 
         MXLog.info("Signing out")
+        // Its stop needs the session, and a share left running would keep sending from a signed-out watch.
+        await stopLiveLocation().value
         let oldClientProxy = clientProxy
         await teardownSync(of: oldClientProxy, wasRunning: isSyncRunning).value
         await oldClientProxy?.logout()
@@ -114,7 +123,12 @@ import SwiftUI
             }
             .store(in: &cancellables)
 
-        let flow = UserSessionFlowCoordinator(clientProxy: clientProxy, showsVerificationOnStart: needsVerification)
+        // Before sync starts, so the live share sees every update to our own shares.
+        let locationServices = makeLocationServices(clientProxy)
+        self.locationServices = locationServices
+        restoreLiveLocation(locationServices.liveLocationService, roomSummaryProvider: clientProxy.roomSummaryProvider)
+
+        let flow = UserSessionFlowCoordinator(clientProxy: clientProxy, locationServices: locationServices, showsVerificationOnStart: needsVerification)
         flow.actionsPublisher
             .sink { [weak self] action in
                 switch action {
@@ -132,9 +146,35 @@ import SwiftUI
     }
 
     private func clearSession() {
+        stopLiveLocation()
         teardownSync(of: clientProxy, wasRunning: isSyncRunning)
         sessionStore.clear()
         showAuthentication()
+    }
+
+    /// Resumes a share from before a relaunch straight away, and again once the room list has loaded
+    /// in case its room wasn't available yet.
+    private func restoreLiveLocation(_ liveLocationService: LiveLocationServiceProtocol, roomSummaryProvider: RoomSummaryProviderProtocol) {
+        liveLocationRestoreTask = Task { await liveLocationService.restore() }
+        liveLocationRestoreCancellable = roomSummaryProvider.roomsPublisher
+            .first { !$0.isEmpty }
+            .sink { [weak self] _ in
+                self?.liveLocationRestoreTask = Task { await liveLocationService.restore() }
+            }
+    }
+
+    /// Detaches the session's live share straight away, then waits for any restore before stopping it.
+    @discardableResult
+    private func stopLiveLocation() -> Task<Void, Never> {
+        let liveLocationService = locationServices?.liveLocationService
+        let restoreTask = liveLocationRestoreTask
+        locationServices = nil
+        liveLocationRestoreCancellable = nil
+        liveLocationRestoreTask = nil
+        return Task {
+            await restoreTask?.value
+            await liveLocationService?.stop()
+        }
     }
 
     /// Chains onto any in-flight start/stop so a fast run of phase changes applies in order: a request

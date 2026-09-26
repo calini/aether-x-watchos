@@ -208,15 +208,64 @@ struct AppCoordinatorTests {
         #expect(callOrder == ["stop", "logout"])
     }
 
+    @Test
+    func aSessionRestoresLiveLocationBeforeSyncAndAgainOnceTheRoomsLoad() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+
+        await coordinator.start()
+        coordinator.handleScenePhase(.active)
+
+        // Built before sync, so no "stopped elsewhere" update for our own share is missed.
+        #expect(setup.locationServicesMadeBeforeSync.values == [true])
+        try await waitUntil { setup.liveLocationService.restoreCallsCount == 1 }
+        setup.rooms.send([.fixture(id: "!a", name: "Alice")])
+        try await waitUntil { setup.liveLocationService.restoreCallsCount == 2 }
+        setup.rooms.send([.fixture(id: "!a", name: "Alice"), .fixture(id: "!b", name: "Bob")])
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(setup.liveLocationService.restoreCallsCount == 2)
+    }
+
+    @Test
+    func signingOutStopsLiveLocationBeforeLoggingOut() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+
+        var callOrder: [String] = []
+        setup.liveLocationService.stopClosure = { callOrder.append("stopLiveLocation") }
+        setup.clientProxy.logoutClosure = { callOrder.append("logout") }
+
+        await coordinator.signOut()
+
+        #expect(callOrder == ["stopLiveLocation", "logout"])
+    }
+
+    @Test
+    func authErrorsStopLiveLocation() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+
+        setup.actions.send(.authError(isSoftLogout: false))
+
+        try await waitUntil { setup.liveLocationService.stopCallsCount == 1 }
+    }
+
     // MARK: - Helpers
 
     private func makeCoordinator() -> (AppCoordinator, UserSessionRestorerMock, SessionStoreMock, Setup) {
         let restorer = UserSessionRestorerMock()
         let sessionStore = SessionStoreMock()
+        let setup = Setup()
         let coordinator = AppCoordinator(sessionStore: sessionStore,
                                          restorer: restorer,
                                          authenticationService: AuthenticationServiceMock(),
-                                         qrLoginService: QRLoginServiceMock())
-        return (coordinator, restorer, sessionStore, Setup())
+                                         qrLoginService: QRLoginServiceMock(),
+                                         makeLocationServices: { clientProxy in
+                                             setup.locationServicesMadeBeforeSync.values.append((clientProxy as? ClientProxyMock)?.startSyncCalled == false)
+                                             return setup.locationServices
+                                         })
+        return (coordinator, restorer, sessionStore, setup)
     }
 }

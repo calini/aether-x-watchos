@@ -135,6 +135,29 @@ struct LiveLocationServiceTests {
         #expect(harness.locationProvider.stopUpdatesCallsCount == 1)
     }
 
+    /// Signing out stops before logging out, so a share still starting must not come up afterwards.
+    @Test
+    func stopDuringAStartEndsTheNewShare() async throws {
+        let harness = Harness()
+        let gate = AsyncGate()
+        harness.room("!a").startLiveLocationShareDurationClosure = { _ in
+            await gate.wait()
+            return .success("$beacon-!a")
+        }
+        let starting = Task { await harness.service.start(roomID: "!a", duration: .seconds(900)) }
+        try await waitUntil { harness.room("!a").startLiveLocationShareDurationCalled }
+
+        let stopping = Task { await harness.service.stop() }
+        await settle()
+        await gate.open()
+        await stopping.value
+
+        #expect(await starting.value.failure == nil)
+        #expect(harness.service.state == .idle)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
+        #expect(harness.store.record == nil)
+    }
+
     @Test
     func startingInAnotherRoomStopsTheFirst() async throws {
         let harness = try await Harness.sharing()

@@ -45,6 +45,8 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             state.bindings.actionsItem = item
         case .showLocation(let item):
             showLocation(item)
+        case .showAttachments:
+            state.bindings.attachments = AttachmentsPresentation()
         case .reply(let item):
             state.bindings.actionsItem = nil
             state.replyingTo = item
@@ -63,6 +65,11 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         case .dismissError:
             state.bindings.errorMessage = nil
         }
+    }
+
+    /// Called once something has been shared from the (+) sheet.
+    func dismissAttachments() {
+        state.bindings.attachments = nil
     }
 
     private func appear() {

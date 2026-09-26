@@ -27,6 +27,7 @@ protocol LiveLocationServiceProtocol: AnyObject {
     func restore() async
     /// Stops any share in another room first (callers confirm with the user before calling).
     func start(roomID: String, duration: Duration) async -> Result<Void, LiveLocationServiceError>
+    /// Also settles a restore or start in progress, so no share comes up once it returns.
     func stop() async
 }
 
@@ -106,7 +107,8 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     private let now: () -> Date
     private let stateSubject = CurrentValueSubject<LiveLocationState, Never>(.idle)
     private var activeShare: ActiveShare?
-    private var isStarting = false
+    /// The start in progress, awaited by `stop` so a share can't come up after it (e.g. after signing out).
+    private var startTask: Task<Result<Void, LiveLocationServiceError>, Never>?
     /// The restore in progress, awaited by `start` and `stop` so a resumed share can't outlive them.
     private var restoreTask: Task<Void, Never>?
     /// Non-nil while Core Location updates run for us.
@@ -155,19 +157,33 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     }
 
     func start(roomID: String, duration: Duration) async -> Result<Void, LiveLocationServiceError> {
-        guard !isStarting else {
+        guard startTask == nil else {
             MXLog.error("A live location share is already starting")
             return .failure(.startFailed)
         }
-        isStarting = true
-        defer { isStarting = false }
-
         guard locationProvider.authorization == .authorized else {
             MXLog.info("Can't start a live location share without location access")
             return .failure(.noLocationAccess)
         }
+
+        let task = Task { await performStart(roomID: roomID, duration: duration) }
+        startTask = task
+        let result = await task.value
+        startTask = nil
+        return result
+    }
+
+    func stop() async {
         await restoreTask?.value
-        await stop()
+        _ = await startTask?.value
+        await stopActiveShare()
+    }
+
+    // MARK: - Private
+
+    private func performStart(roomID: String, duration: Duration) async -> Result<Void, LiveLocationServiceError> {
+        await restoreTask?.value
+        await stopActiveShare()
         await abandonSavedShare()
 
         // Started first so Core Location warms up while the share is created.
@@ -193,8 +209,7 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         }
     }
 
-    func stop() async {
-        await restoreTask?.value
+    private func stopActiveShare() async {
         guard let share = activeShare else { return }
         endLocally(share)
         MXLog.info("Stopping the live location share in \(share.roomID)")
@@ -204,8 +219,6 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             MXLog.error("Stopping the live location share failed (attempt \(attempt))")
         }
     }
-
-    // MARK: - Private
 
     private func performRestore() async {
         guard activeShare == nil, let record = store.load() else { return }
@@ -227,7 +240,7 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             // No SDK stop: it acts on the room, so it would end a share from another device.
             MXLog.info("The saved live location share is no longer ours to resume")
             store.clear()
-        case .live where isStarting:
+        case .live where startTask != nil:
             MXLog.info("A new live location share is starting, stopping the saved one")
             await abandon(record, in: roomProxy)
         case .live where locationProvider.authorization != .authorized:
@@ -381,7 +394,8 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         guard let share = activeShare else { return }
         if now() >= share.endsAt {
             MXLog.info("The live location share in \(share.roomID) expired")
-            await stop()
+            // Not `stop()`: it would wait for a start in progress, then end the new share instead.
+            await stopActiveShare()
         } else {
             sendIfDue()
         }

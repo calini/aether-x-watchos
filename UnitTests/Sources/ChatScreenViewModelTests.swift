@@ -156,6 +156,17 @@ struct ChatScreenViewModelTests {
     }
 
     @Test
+    func thePlusButtonShowsAttachmentsUntilDismissed() {
+        let (viewModel, _, _) = makeViewModel()
+
+        viewModel.context.send(viewAction: .showAttachments)
+        #expect(viewModel.context.viewState.bindings.attachments != nil)
+
+        viewModel.dismissAttachments()
+        #expect(viewModel.context.viewState.bindings.attachments == nil)
+    }
+
+    @Test
     func showLocationOpensAOneOffLocation() {
         let (viewModel, _, _) = makeViewModel()
         let geoURI = GeoURI(latitude: 51.5072, longitude: -0.1276, uncertainty: nil)
