@@ -2,14 +2,14 @@
 
 ## How to install
 
-1. Check out the `watchos` branch of https://github.com/calini/matrix-rust-sdk at `../matrix-rust-sdk` (or set `MATRIX_RUST_SDK_PATH`). Build the SDK for devices with the full `Tools/build-sdk.sh` (not `--dev`, which is simulator only; ~12 minutes), then run `xcodegen`.
+1. Check out https://github.com/calini/matrix-rust-sdk at `../matrix-rust-sdk` (or set `MATRIX_RUST_SDK_PATH`): `watchos-http-transport` (recommended) for arm64 watches such as the Series 9, or `watchos-http-transport-arm64_32` to also support arm64_32 watches (SE 2nd generation, Series 6–8). Build the SDK for devices with the full `Tools/build-sdk.sh` (not `--dev`, which is simulator only; ~12 minutes), then run `xcodegen`.
 2. Open `ElementXWatch.xcodeproj` in Xcode.
 3. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM`. Find your Team ID in the Apple Development certificate: `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject` and use the `OU=` value (Xcode doesn't show it for Personal Teams). The value in parentheses in the certificate's `CN=` is **not** the Team ID.
 4. Keep the scheme's Run action on the **Debug** configuration: the transport audit's tripwire proxy (`127.0.0.1:9`) only exists in Debug builds.
 5. Select the watch as the run destination and Run. On a real watch, build from commit `c680eec` (runpath fix) or later.
 6. On the iPhone, in Element X: tap the version number in Settings 7 times, then turn on **Developer options → Link new device**.
 
-Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork: `watchos` @ `229ede199` · App: `28c590b`
+Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork: `watchos-http-transport-arm64_32` @ `229ede199` · App: `28c590b`
 
 ## Measurements
 

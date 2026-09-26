@@ -1,3 +1,5 @@
 // Simulator builds are signed to run locally; device builds need a team in Local.xcconfig.
 CODE_SIGN_IDENTITY[sdk=watchsimulator*] = -
+// Written by Tools/build-sdk.sh to match the SDK build (Sentry bindings, device archs). Includes are relative to this file.
+#include? "../Packages/MatrixRustSDK/SDKBuild.xcconfig"
 #include? "Local.xcconfig"

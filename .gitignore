@@ -7,5 +7,6 @@ build/
 Config/Local.xcconfig
 Packages/MatrixRustSDK/MatrixSDKFFI.xcframework/
 Packages/MatrixRustSDK/Sources/
+Packages/MatrixRustSDK/SDKBuild.xcconfig
 .build/
 .swiftpm/

@@ -21,17 +21,30 @@ enum Tracing {
         let level = LogLevel.info
         #endif
 
+        let writeToFiles = TracingFileConfiguration(path: directory.path(percentEncoded: false),
+                                                    filePrefix: "rust",
+                                                    fileSuffix: "log",
+                                                    maxTotalSizeBytes: 20_000_000,
+                                                    maxAgeSeconds: 3 * 24 * 60 * 60)
+
+        // Swift can't #if a single argument. A nil sentryConfig keeps Sentry off, so it opens no sockets.
+        #if MATRIX_SDK_SENTRY
+        let config = TracingConfiguration(logLevel: level,
+                                          traceLogPacks: [],
+                                          extraTargets: [],
+                                          writeToStdoutOrSystem: true,
+                                          writeToFiles: writeToFiles,
+                                          sentryConfig: nil)
+        #else
+        let config = TracingConfiguration(logLevel: level,
+                                          traceLogPacks: [],
+                                          extraTargets: [],
+                                          writeToStdoutOrSystem: true,
+                                          writeToFiles: writeToFiles)
+        #endif
+
         do {
-            try initPlatform(config: .init(logLevel: level,
-                                           traceLogPacks: [],
-                                           extraTargets: [],
-                                           writeToStdoutOrSystem: true,
-                                           writeToFiles: .init(path: directory.path(percentEncoded: false),
-                                                               filePrefix: "rust",
-                                                               fileSuffix: "log",
-                                                               maxTotalSizeBytes: 20_000_000,
-                                                               maxAgeSeconds: 3 * 24 * 60 * 60)),
-                             useLightweightTokioRuntime: true)
+            try initPlatform(config: config, useLightweightTokioRuntime: true)
         } catch {
             MXLog.error("Failed to set up Rust tracing: \(error)")
         }

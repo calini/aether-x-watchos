@@ -10,8 +10,10 @@ The SDK changes live in the fork [calini/matrix-rust-sdk](https://github.com/cal
 
 | Branch | Contents | Purpose |
 |---|---|---|
-| `watchos-http-transport` | The pluggable `HttpTransport` only: the client transport, OAuth and QR login routed through it, FFI exposure, and changelog entries. | Candidate PR to [matrix-org/matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk). Unused unless a transport is set, so other platforms keep using reqwest. |
-| `watchos` | `watchos-http-transport` plus fork-only commits. | What this app builds from (`Tools/build-sdk.sh`). |
+| `watchos-http-transport` | The pluggable `HttpTransport` only: the client transport, OAuth and QR login routed through it, FFI exposure, and changelog entries. | Candidate PR to [matrix-org/matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk). Unused unless a transport is set, so other platforms keep using reqwest. What this app builds from by default: arm64 watches only, Sentry compiled in but never initialised. |
+| `watchos-http-transport-arm64_32` | `watchos-http-transport` plus fork-only commits. | Optional app build for every watch, including arm64_32 (SE 2nd generation, Series 6–8), without Sentry. |
+
+The app builds from either branch; `watchos-http-transport` is the default. On it, `build-sdk.sh` builds for arm64 watches only and with the SDK's default features, and writes `Packages/MatrixRustSDK/SDKBuild.xcconfig` (`ARCHS = arm64` for devices, `MATRIX_SDK_SENTRY` so `Tracing.swift` passes a nil `sentryConfig`).
 
 ### Upstreaming `watchos-http-transport`
 
@@ -27,9 +29,11 @@ The SDK changes live in the fork [calini/matrix-rust-sdk](https://github.com/cal
   - The new `HttpError::Transport` variant is a breaking change, and it has no non-breaking alternative. Flag it with a `[**breaking**]` changelog fragment.
   - Name the changelog fragments after the PR number (they're `XXXX.*.md` for now).
   - Add tests for the rendezvous PUT with `If-Match`, for retrying after a transport failure, and for FFI `get_url` going through the transport.
-- [ ] Keep the upstream change to the transport only. Everything watch-specific stays on `watchos`.
+- [ ] Keep the upstream change to the transport only. Everything watch-specific stays on `watchos-http-transport-arm64_32`.
 
-### Fork-only commits on `watchos`
+### Fork-only commits on `watchos-http-transport-arm64_32`
+
+Without them (the default `watchos-http-transport` build), the app runs on arm64 watches only and has Sentry compiled in but never initialised.
 
 - **`feat(xtask)`: choose the matrix-sdk-ffi features for Swift frameworks.** `build-sdk.sh` passes `--features ""` to leave out Sentry, which would open its own sockets. It's a small, generic xtask option, so it could be proposed upstream as a separate PR. Alternatives: `build-sdk.sh` could call cargo and uniffi-bindgen directly, or Sentry could stop being a default feature upstream.
 - **`chore`: patch `constant_time_eq` for `arm64_32` watchOS.** This only matters for the `arm64_32` slice, which covers the older watches that can run watchOS 11 and later (Series 6–8 and SE). The crate's NEON code isn't limited to 64-bit pointers, so it doesn't build for `arm64_32`. The fork vendors a patched copy (`contrib/patches/constant_time_eq`, wired via `[patch]`). Options:
@@ -37,6 +41,12 @@ The SDK changes live in the fork [calini/matrix-rust-sdk](https://github.com/cal
   - **Or support 64-bit `arm64` watches only** (Series 9 and later, Ultra 2 and later, on watchOS 26). That removes this patch, the `arm64_32` slice, `Tools/watchos-arm64_32.toolchain.cmake`, and the `aws-lc-sys` workaround below. It also cuts build time and app size. The cost: older watches can't run the app.
 
 The old `watch` Cargo profile has moved out of the SDK. The `aws-lc-sys` build workaround for `arm64_32` (no assembly) now lives in this repo's `Tools/watchos-arm64_32.toolchain.cmake`, and the SDK builds with its stock `reldbg` profile.
+
+### Publish a prebuilt SDK package (like element-x-ios)
+
+- [ ] Today anyone building the app needs Rust, the SDK fork and about 12 minutes of `Tools/build-sdk.sh`.
+- element-x-ios instead pins `MatrixRustSDK` to [element-hq/matrix-rust-components-swift](https://github.com/element-hq/matrix-rust-components-swift) with `exactVersion` in `project.yml`: a Swift package whose `binaryTarget` points at a zipped xcframework attached to a GitHub release (URL + checksum), plus the generated Swift bindings. `swift run tools build-sdk` only switches to a local build (clones `../matrix-rust-sdk`, symlinks it as `matrix-rust-components-swift`, rewrites `project.yml`, reruns xcodegen).
+- Plan: publish our own components package (e.g. `calini/matrix-rust-components-swift`) with the watchOS xcframework (per SDK mode) as release assets, pin it in `project.yml`, and make `build-sdk.sh` the opt-in local-development path. Best done once the SDK side settles.
 
 ### Known SDK-side issues
 
