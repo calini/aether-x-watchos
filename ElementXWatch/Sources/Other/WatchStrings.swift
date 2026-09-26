@@ -43,7 +43,7 @@ nonisolated enum WatchStrings {
     static let continueAction = "Continue"
     static let signInMethodTitle = "Sign in"
     static let signInWithPassword = "Sign in with password"
-    static let signInWithIPhone = "Sign in with iPhone"
+    static let signInWithQRCode = "Sign in with QR code"
     static let noSignInMethods = "This server doesn't support signing in from a watch."
     static let usernamePrompt = "Username"
     static let passwordPrompt = "Password"

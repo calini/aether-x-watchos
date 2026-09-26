@@ -21,7 +21,7 @@ struct LoginMethodScreen: View {
                         .buttonStyle(.fullWidthProminent)
                 }
                 if context.viewState.options.supportsQRCode {
-                    Button(WatchStrings.signInWithIPhone) { context.send(viewAction: .qrCode) }
+                    Button(WatchStrings.signInWithQRCode) { context.send(viewAction: .qrCode) }
                         .buttonStyle(.fullWidthProminent)
                 }
                 if !context.viewState.options.supportsAnyMethod {
