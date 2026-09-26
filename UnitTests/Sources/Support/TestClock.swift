@@ -41,6 +41,8 @@ nonisolated final class TestClock: Clock {
     var now: Instant { state.withLock { $0.now } }
     var minimumResolution: Duration { .zero }
     var sleeperCount: Int { state.withLock { $0.sleepers.count } }
+    /// When each pending sleep ends, earliest first, as offsets from the clock's start.
+    var deadlines: [Duration] { state.withLock { $0.sleepers.values.map(\.deadline.offset).sorted() } }
 
     func sleep(until deadline: Instant, tolerance: Duration?) async throws {
         let id = UUID()

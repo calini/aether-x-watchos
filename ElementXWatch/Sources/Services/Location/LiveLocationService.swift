@@ -75,6 +75,8 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     static let maxFailuresBeforePause = 3
     /// How long a relaunch waits for the room's live shares to load before giving up on resuming.
     static let restoreTimeout: Duration = .seconds(10)
+    /// How long a new share waits for sync to deliver it as live, before its first update or a retried stop.
+    static let confirmationTimeout: Duration = .seconds(30)
 
     /// The share in progress. Compared by identity so async work for an ended share is dropped.
     private final class ActiveShare {
@@ -83,6 +85,11 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         let roomProxy: RoomLocationProxyProtocol
         let eventID: String
         let endsAt: Date
+        /// The SDK sends updates and stops against the share it last synced, so until sync delivers this one
+        /// as live, updates would fail or attach to an older share.
+        var isConfirmed: Bool
+        /// When the first update stops waiting for the confirmation and is tried anyway.
+        let confirmationDeadline: Date
         var lastSentFix: GeoURI?
         var lastAttemptDate: Date?
         var lastAttemptFailed = false
@@ -90,11 +97,25 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         var isSending = false
         var sentCount = 0
 
-        init(roomID: String, roomProxy: RoomLocationProxyProtocol, eventID: String, endsAt: Date) {
+        init(roomID: String, roomProxy: RoomLocationProxyProtocol, eventID: String, endsAt: Date, isConfirmed: Bool, confirmationDeadline: Date) {
             self.roomID = roomID
             self.roomProxy = roomProxy
             self.eventID = eventID
             self.endsAt = endsAt
+            self.isConfirmed = isConfirmed
+            self.confirmationDeadline = confirmationDeadline
+        }
+    }
+
+    /// A stop that failed because sync hadn't delivered its share yet, retried once it does.
+    private final class PendingStop {
+        let roomID: String
+        var confirmation: OneShotLookup<Bool>?
+        var task: Task<Void, Never>?
+        var isDropped = false
+
+        init(roomID: String) {
+            self.roomID = roomID
         }
     }
 
@@ -115,6 +136,11 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     private var updatesCancellable: AnyCancellable?
     private var latestFix: GeoURI?
     private var ownBeaconInfoCancellable: AnyCancellable?
+    private var authorizationCancellable: AnyCancellable?
+    /// Our shares sync has delivered as live, so a confirmation arriving before `start` returns isn't lost.
+    private var liveEventIDs: Set<String> = []
+    /// Keyed by the share's event ID.
+    private var pendingStops: [String: PendingStop] = [:]
     private var timerTask: Task<Void, Never>?
 
     var state: LiveLocationState { stateSubject.value }
@@ -135,6 +161,10 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         self.now = now
         ownBeaconInfoCancellable = ownBeaconInfoPublisher.sink { [weak self] info in
             self?.handleOwnBeaconInfo(info)
+        }
+        authorizationCancellable = locationProvider.authorizationPublisher.sink { [weak self] authorization in
+            guard authorization == .denied else { return }
+            self?.handleLocationAccessLost()
         }
     }
 
@@ -177,6 +207,10 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         await restoreTask?.value
         _ = await startTask?.value
         await stopActiveShare()
+        // A stop sent before sync delivered the share only lands once it does, and needs the session until then.
+        for pendingStop in pendingStops.values {
+            await pendingStop.task?.value
+        }
     }
 
     // MARK: - Private
@@ -194,12 +228,17 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             return .failure(.startFailed)
         }
 
+        // The new share replaces the old one (same state key), so a late retried stop would end the new one.
+        dropPendingStops(in: roomID)
+
         switch await roomProxy.startLiveLocationShare(duration: duration) {
         case .success(let eventID):
             let endsAt = now().addingTimeInterval(duration / .seconds(1))
             store.save(LiveLocationShareRecord(roomID: roomID, eventID: eventID, endsAt: endsAt))
             MXLog.info("Live location share started in \(roomID)")
-            begin(ActiveShare(roomID: roomID, roomProxy: roomProxy, eventID: eventID, endsAt: endsAt))
+            begin(ActiveShare(roomID: roomID, roomProxy: roomProxy, eventID: eventID, endsAt: endsAt,
+                              isConfirmed: liveEventIDs.contains(eventID),
+                              confirmationDeadline: now().addingTimeInterval(Self.confirmationTimeout / .seconds(1))))
             return .success(())
         case .failure:
             // The error isn't logged: its description could echo location data.
@@ -215,8 +254,60 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         MXLog.info("Stopping the live location share in \(share.roomID)")
 
         for attempt in 1...2 {
-            if case .success = await share.roomProxy.stopLiveLocationShare() { return }
-            MXLog.error("Stopping the live location share failed (attempt \(attempt))")
+            switch await share.roomProxy.stopLiveLocationShare() {
+            case .success:
+                return
+            case .failure(.beaconNotReady) where !liveEventIDs.contains(share.eventID):
+                MXLog.info("The live location share in \(share.roomID) isn't synced yet, stopping it once it is")
+                retryStopOnceLive(share)
+                return
+            case .failure:
+                MXLog.error("Stopping the live location share failed (attempt \(attempt))")
+            }
+        }
+    }
+
+    /// Holds the share's room for the retry, although the share has already ended on this device.
+    private func retryStopOnceLive(_ share: ActiveShare) {
+        let pendingStop = PendingStop(roomID: share.roomID)
+        pendingStops[share.eventID] = pendingStop
+        pendingStop.task = Task { [weak self] in
+            let isLive = await self?.waitUntilLive(share.eventID, for: pendingStop) ?? false
+            if self?.pendingStops[share.eventID] === pendingStop {
+                self?.pendingStops[share.eventID] = nil
+            }
+            guard isLive, !pendingStop.isDropped else {
+                MXLog.info("Not retrying the stop of the live location share in \(share.roomID)")
+                return
+            }
+            switch await share.roomProxy.stopLiveLocationShare() {
+            case .success: MXLog.info("Stopped the live location share in \(share.roomID) once it synced")
+            case .failure: MXLog.error("Retrying the stop of the live location share in \(share.roomID) failed")
+            }
+        }
+    }
+
+    /// Whether sync delivers the share as live within `confirmationTimeout`.
+    private func waitUntilLive(_ eventID: String, for pendingStop: PendingStop) async -> Bool {
+        if liveEventIDs.contains(eventID) { return true }
+        guard !pendingStop.isDropped else { return false }
+        let sleep = makeSleep(Self.confirmationTimeout)
+        return await withCheckedContinuation { continuation in
+            let confirmation = OneShotLookup(continuation)
+            pendingStop.confirmation = confirmation
+            confirmation.attach(Task {
+                try? await sleep()
+                confirmation.finish(false)
+            })
+        }
+    }
+
+    private func dropPendingStops(in roomID: String) {
+        for (eventID, pendingStop) in pendingStops where pendingStop.roomID == roomID {
+            MXLog.info("Dropping the pending stop of the replaced live location share in \(roomID)")
+            pendingStop.isDropped = true
+            pendingStop.confirmation?.finish(false)
+            pendingStops[eventID] = nil
         }
     }
 
@@ -249,7 +340,9 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         case .live:
             MXLog.info("Resuming the live location share in \(record.roomID)")
             startReceivingUpdates()
-            begin(ActiveShare(roomID: record.roomID, roomProxy: roomProxy, eventID: record.eventID, endsAt: record.endsAt))
+            // Already synced: the room's live shares come from the same state.
+            begin(ActiveShare(roomID: record.roomID, roomProxy: roomProxy, eventID: record.eventID, endsAt: record.endsAt,
+                              isConfirmed: true, confirmationDeadline: now()))
         case .unknown:
             // Otherwise it would stay live on the server, with a stale location and nothing to stop it.
             MXLog.info("The room's live shares didn't load in time, stopping the saved live location share")
@@ -321,9 +414,29 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     }
 
     private func handleOwnBeaconInfo(_ info: OwnBeaconInfo) {
-        guard !info.isLive, let share = activeShare, info.eventID == share.eventID else { return }
+        if info.isLive {
+            handleShareSynced(eventID: info.eventID)
+            return
+        }
+        liveEventIDs.remove(info.eventID)
+        guard let share = activeShare, info.eventID == share.eventID else { return }
         MXLog.info("The live location share in \(share.roomID) was stopped elsewhere")
         endLocally(share)
+    }
+
+    private func handleShareSynced(eventID: String) {
+        liveEventIDs.insert(eventID)
+        pendingStops[eventID]?.confirmation?.finish(true)
+        guard let share = activeShare, share.eventID == eventID, !share.isConfirmed else { return }
+        MXLog.info("The live location share in \(share.roomID) has synced")
+        share.isConfirmed = true
+        sendIfDue()
+    }
+
+    private func handleLocationAccessLost() {
+        guard activeShare != nil else { return }
+        MXLog.info("Location access was turned off, ending the live location share")
+        Task { await stopActiveShare() }
     }
 
     private func sendIfDue() {
@@ -350,6 +463,10 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             share.lastAttemptFailed = false
             share.consecutiveFailures = 0
             MXLog.info("Live location update sent (#\(share.sentCount))")
+        case .failure(.beaconNotReady) where !share.isConfirmed:
+            // Expected until sync delivers the share, so it doesn't count towards pausing.
+            share.lastAttemptFailed = true
+            MXLog.info("The live location share isn't synced yet, retrying the update")
         case .failure:
             // The error isn't logged: its description could echo the coordinates.
             share.lastAttemptFailed = true
@@ -361,13 +478,16 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     }
 
     /// Movement or a failed attempt makes the next update due after the minimum interval; otherwise the keep-alive.
+    /// Until the share has synced, nothing is due before its confirmation deadline.
     private func nextSendDate(for share: ActiveShare) -> Date? {
         guard let latestFix else { return nil }
-        guard let lastAttemptDate = share.lastAttemptDate else { return .distantPast }
-
-        let hasMoved = share.lastSentFix.map { Self.distance(from: $0, to: latestFix) >= Self.minimumDistance } ?? true
-        let interval = share.lastAttemptFailed || hasMoved ? Self.minimumInterval : Self.keepAliveInterval
-        return lastAttemptDate.addingTimeInterval(interval / .seconds(1))
+        var dueDate = Date.distantPast
+        if let lastAttemptDate = share.lastAttemptDate {
+            let hasMoved = share.lastSentFix.map { Self.distance(from: $0, to: latestFix) >= Self.minimumDistance } ?? true
+            let interval = share.lastAttemptFailed || hasMoved ? Self.minimumInterval : Self.keepAliveInterval
+            dueDate = lastAttemptDate.addingTimeInterval(interval / .seconds(1))
+        }
+        return share.isConfirmed ? dueDate : max(dueDate, share.confirmationDeadline)
     }
 
     /// One timer at a time, firing at the next update or at the share's end, whichever comes first.
@@ -457,12 +577,12 @@ private enum SavedShareStatus {
 }
 
 /// Resolves a continuation once, then drops its subscription and timeout.
-private final class OneShotLookup {
-    private var continuation: CheckedContinuation<SavedShareStatus, Never>?
+private final class OneShotLookup<Value: Sendable> {
+    private var continuation: CheckedContinuation<Value, Never>?
     private var cancellable: AnyCancellable?
     private var timeoutTask: Task<Void, Never>?
 
-    init(_ continuation: CheckedContinuation<SavedShareStatus, Never>) {
+    init(_ continuation: CheckedContinuation<Value, Never>) {
         self.continuation = continuation
     }
 
@@ -482,13 +602,13 @@ private final class OneShotLookup {
         }
     }
 
-    func finish(_ status: SavedShareStatus) {
+    func finish(_ value: Value) {
         guard let continuation else { return }
         self.continuation = nil
         cancellable?.cancel()
         cancellable = nil
         timeoutTask?.cancel()
         timeoutTask = nil
-        continuation.resume(returning: status)
+        continuation.resume(returning: value)
     }
 }

@@ -125,7 +125,8 @@ Out of scope, for later:
 - **Ending:** at the end of the time, or on Stop, the watch stops Core Location, turns off background updates and calls `stopLiveLocationShare()`.
   - If the app is killed mid-share, the share still ends on its own when its time runs out.
   - When the app relaunches, the own-beacon subscription reports whether a share is still active in its time window. If it is, the service resumes sending.
-- **Background:** updates keep flowing with the wrist down, through the background location mode. The chat's normal sync still pauses in the background as it does today; sending location doesn't need it.
+- **Background:** updates keep flowing with the wrist down, through the background location mode.
+- **Sync during a share (ruling R4, corrects an earlier assumption):** sync keeps running while a live share is active, even with the wrist down, and pauses again once it ends. The SDK sends each update and the stop against our `beacon_info` as last synced into its state store (sending the state event doesn't write it there), and stops made elsewhere reach the watch only through sync. So the first update waits until sync reports the new share as live (30 s at most), "not synced yet" failures before then don't count towards pausing, and a stop that fails for that reason is retried once the share syncs (30 s at most).
 - **Privacy:**
   - Coordinates never go into logs, only events such as "live location update sent (#12)".
   - Background location is only active while a live share runs.

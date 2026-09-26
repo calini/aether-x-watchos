@@ -19,8 +19,9 @@ struct Setup {
     let clientProxy = ClientProxyMock()
     let locationProvider = LocationProviderMock()
     let liveLocationService = LiveLocationServiceMock()
-    /// Whether each `makeLocationServices` call came before sync started.
-    let locationServicesMadeBeforeSync = Recorder<Bool>()
+    let liveLocationState = CurrentValueSubject<LiveLocationState, Never>(.idle)
+    /// Named calls in the order they happened, for tests that check sequencing.
+    let calls = Recorder<String>()
 
     var locationServices: LocationServices {
         LocationServices(locationProvider: locationProvider, liveLocationService: liveLocationService)
@@ -39,7 +40,7 @@ struct Setup {
         locationProvider.authorization = .authorized
         locationProvider.authorizationPublisher = Just(.authorized).eraseToAnyPublisher()
         liveLocationService.state = .idle
-        liveLocationService.statePublisher = Just(.idle).eraseToAnyPublisher()
+        liveLocationService.statePublisher = liveLocationState.eraseToAnyPublisher()
     }
 }
 

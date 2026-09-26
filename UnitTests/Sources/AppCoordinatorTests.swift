@@ -209,15 +209,61 @@ struct AppCoordinatorTests {
     }
 
     @Test
-    func aSessionRestoresLiveLocationBeforeSyncAndAgainOnceTheRoomsLoad() async throws {
+    func locationServicesAreBuiltBeforeSyncStarts() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        setup.clientProxy.startSyncClosure = { setup.calls.values.append("startSync") }
+        // Already active, so the session requests sync as soon as it exists.
+        coordinator.handleScenePhase(.active)
+
+        await coordinator.start()
+
+        try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
+        // Otherwise the live share could miss an own-beacon update from the first sync.
+        #expect(setup.calls.values == ["makeLocationServices", "startSync"])
+    }
+
+    @Test
+    func aLiveShareKeepsSyncRunningWhileTheSceneIsInactive() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        await coordinator.handleScenePhase(.active).value
+        #expect(setup.clientProxy.startSyncCallsCount == 1)
+
+        setup.liveLocationState.send(.sharing(roomID: "!a", endsAt: .distantFuture, isPaused: false))
+        await coordinator.handleScenePhase(.inactive).value
+        await coordinator.handleScenePhase(.background).value
+
+        #expect(setup.clientProxy.stopSyncCallsCount == 0)
+
+        setup.liveLocationState.send(.idle)
+
+        try await waitUntil { setup.clientProxy.stopSyncCallsCount == 1 }
+        #expect(setup.clientProxy.startSyncCallsCount == 1)
+    }
+
+    @Test
+    func aLiveShareResumedInTheBackgroundStartsSync() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        await coordinator.handleScenePhase(.background).value
+        #expect(setup.clientProxy.startSyncCallsCount == 0)
+
+        setup.liveLocationState.send(.sharing(roomID: "!a", endsAt: .distantFuture, isPaused: false))
+
+        try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
+    }
+
+    @Test
+    func aSessionRestoresLiveLocationAndAgainOnceTheRoomsLoad() async throws {
         let (coordinator, restorer, _, setup) = makeCoordinator()
         restorer.restoreReturnValue = .success(setup.clientProxy)
 
         await coordinator.start()
         coordinator.handleScenePhase(.active)
 
-        // Built before sync, so no "stopped elsewhere" update for our own share is missed.
-        #expect(setup.locationServicesMadeBeforeSync.values == [true])
         try await waitUntil { setup.liveLocationService.restoreCallsCount == 1 }
         setup.rooms.send([.fixture(id: "!a", name: "Alice")])
         try await waitUntil { setup.liveLocationService.restoreCallsCount == 2 }
@@ -262,8 +308,8 @@ struct AppCoordinatorTests {
                                          restorer: restorer,
                                          authenticationService: AuthenticationServiceMock(),
                                          qrLoginService: QRLoginServiceMock(),
-                                         makeLocationServices: { clientProxy in
-                                             setup.locationServicesMadeBeforeSync.values.append((clientProxy as? ClientProxyMock)?.startSyncCalled == false)
+                                         makeLocationServices: { _ in
+                                             setup.calls.values.append("makeLocationServices")
                                              return setup.locationServices
                                          })
         return (coordinator, restorer, sessionStore, setup)

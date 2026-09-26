@@ -19,6 +19,7 @@ struct LiveLocationServiceTests {
 
         let result = await harness.service.start(roomID: "!a", duration: .seconds(900))
         harness.updates.send(.home)
+        harness.confirm("!a")
 
         #expect(result.failure == nil)
         #expect(harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(900), isPaused: false))
@@ -44,8 +45,72 @@ struct LiveLocationServiceTests {
         harness.updates.send(.home)
         await gate.open()
         _ = await starting.value
+        harness.confirm("!a")
 
         try await waitUntil { harness.room("!a").sendLiveLocationReceivedInvocations == [.home] }
+    }
+
+    @Test
+    func theFirstUpdateWaitsForTheSyncedShareToBeLive() async throws {
+        let harness = Harness()
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.updates.send(.home)
+        // An older share of ours going live isn't the new one.
+        harness.ownBeaconInfo.send(OwnBeaconInfo(roomID: "!a", eventID: "$older", isLive: true))
+
+        // Held back until then, for 30 s at most (a send would move the timer to the share's end, then 3 min).
+        try await waitUntil { harness.clock.deadlines == [.seconds(30)] }
+        #expect(harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(900), isPaused: false))
+
+        harness.confirm("!a")
+
+        try await waitUntil { harness.room("!a").sendLiveLocationReceivedInvocations == [.home] }
+    }
+
+    @Test
+    func theFirstUpdateIsSentAnywayAfter30Seconds() async throws {
+        let harness = Harness()
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.updates.send(.home)
+        try await waitUntil { harness.clock.deadlines == [.seconds(30)] }
+
+        harness.clock.advance(by: .seconds(30))
+
+        try await waitUntil { harness.room("!a").sendLiveLocationReceivedInvocations == [.home] }
+    }
+
+    @Test
+    func aSameRoomRestartWaitsForItsOwnShare() async throws {
+        let harness = try await Harness.sharing()
+        harness.room("!a").startLiveLocationShareDurationReturnValue = .success("$beacon-!a-2")
+
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.updates.send(.home.movedNorth(metres: 100))
+        // Until sync delivers the new share, the SDK would attach updates to the old one.
+        harness.ownBeaconInfo.send(OwnBeaconInfo(roomID: "!a", eventID: "$beacon-!a", isLive: true))
+
+        try await waitUntil { harness.clock.deadlines == [.seconds(30)] }
+        harness.confirm("!a", eventID: "$beacon-!a-2")
+
+        try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 2 }
+        #expect(harness.room("!a").sendLiveLocationReceivedInvocations == [.home, .home.movedNorth(metres: 100)])
+    }
+
+    @Test
+    func notReadyFailuresBeforeTheShareIsLiveDontPause() async throws {
+        let harness = Harness()
+        harness.room("!a").sendLiveLocationReturnValue = .failure(.beaconNotReady)
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.updates.send(.home)
+
+        for attempt in 1...4 {
+            try await waitUntil { harness.clock.deadlines == [.seconds(30 * attempt)] }
+            harness.clock.advance(by: .seconds(30))
+            try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == attempt }
+        }
+        try await waitUntil { harness.clock.deadlines == [.seconds(150)] }
+
+        #expect(harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(900), isPaused: false))
     }
 
     @Test
@@ -54,9 +119,7 @@ struct LiveLocationServiceTests {
 
         harness.clock.advance(by: .seconds(60))
         harness.updates.send(.home.movedNorth(metres: 10))
-        await settle()
-        #expect(harness.room("!a").sendLiveLocationCallsCount == 1)
-
+        // Had the 10 m fix gone out, this one would wait another 30 s and the check below would fail.
         harness.updates.send(.home.movedNorth(metres: 30))
         try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 2 }
         #expect(harness.room("!a").sendLiveLocationReceivedInvocations == [.home, .home.movedNorth(metres: 30)])
@@ -70,9 +133,7 @@ struct LiveLocationServiceTests {
         harness.updates.send(.home.movedNorth(metres: 50))
         // A one-off fix taken elsewhere during the share arrives on the same stream.
         harness.updates.send(.home.movedNorth(metres: 60))
-        await settle()
-        #expect(harness.room("!a").sendLiveLocationCallsCount == 1)
-
+        // Only the latest fix goes out at 30 s, so an early send would show up as an extra invocation.
         harness.clock.advance(by: .seconds(20))
         try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 2 }
         #expect(harness.room("!a").sendLiveLocationReceivedInvocations == [.home, .home.movedNorth(metres: 60)])
@@ -82,12 +143,11 @@ struct LiveLocationServiceTests {
     func sendsAKeepAliveEvery3MinutesWhenStill() async throws {
         let harness = try await Harness.sharing()
 
-        harness.clock.advance(by: .seconds(179))
-        await settle()
-        #expect(harness.room("!a").sendLiveLocationCallsCount == 1)
-
-        harness.clock.advance(by: .seconds(1))
+        // The next update is timed for 3 min after the last.
+        try await waitUntil { harness.clock.deadlines == [.seconds(180)] }
+        harness.clock.advance(by: .seconds(180))
         try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 2 }
+        try await waitUntil { harness.clock.deadlines == [.seconds(360)] }
         harness.clock.advance(by: .seconds(180))
         try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 3 }
         #expect(harness.room("!a").sendLiveLocationReceivedInvocations == [.home, .home, .home])
@@ -106,6 +166,21 @@ struct LiveLocationServiceTests {
     }
 
     @Test
+    func expiresEvenWithoutAnyFix() async throws {
+        let harness = Harness()
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.confirm("!a")
+        try await waitUntil { harness.clock.deadlines == [.seconds(900)] }
+
+        harness.clock.advance(by: .seconds(900))
+
+        try await waitUntil { harness.service.state == .idle }
+        try await waitUntil { harness.room("!a").stopLiveLocationShareCallsCount == 1 }
+        #expect(harness.room("!a").sendLiveLocationCalled == false)
+        #expect(harness.store.record == nil)
+    }
+
+    @Test
     func stopEndsTheShare() async throws {
         let harness = try await Harness.sharing()
 
@@ -116,11 +191,9 @@ struct LiveLocationServiceTests {
         #expect(harness.locationProvider.stopUpdatesCallsCount == 1)
         #expect(harness.store.record == nil)
 
-        // Nothing is sent once the share has ended.
-        harness.clock.advance(by: .seconds(180))
-        harness.updates.send(.home.movedNorth(metres: 100))
-        await settle()
-        #expect(harness.room("!a").sendLiveLocationCallsCount == 1)
+        // Nothing can send once the share has ended: no fixes arrive and no timer is left.
+        #expect(harness.updatesSubscriberCount == 0)
+        #expect(harness.clock.sleeperCount == 0)
     }
 
     @Test
@@ -133,6 +206,70 @@ struct LiveLocationServiceTests {
         #expect(harness.room("!a").stopLiveLocationShareCallsCount == 2)
         #expect(harness.service.state == .idle)
         #expect(harness.locationProvider.stopUpdatesCallsCount == 1)
+    }
+
+    @Test
+    func aStopBeforeTheShareIsLiveIsRetriedOnceItIs() async throws {
+        let harness = Harness()
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        // The SDK has nothing to stop until sync delivers the new share.
+        harness.room("!a").stopLiveLocationShareReturnValue = .failure(.beaconNotReady)
+
+        let stopping = Task { await harness.service.stop() }
+        try await waitUntil { harness.room("!a").stopLiveLocationShareCallsCount == 1 }
+        #expect(harness.service.state == .idle)
+        try await waitUntil { harness.clock.deadlines == [.seconds(30)] }
+        harness.room("!a").stopLiveLocationShareReturnValue = .success(())
+        harness.confirm("!a")
+        await stopping.value
+
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 2)
+    }
+
+    @Test
+    func aStopRetryGivesUpAfter30Seconds() async throws {
+        let harness = Harness()
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.room("!a").stopLiveLocationShareReturnValue = .failure(.beaconNotReady)
+
+        let stopping = Task { await harness.service.stop() }
+        try await waitUntil { harness.clock.deadlines == [.seconds(30)] }
+        harness.clock.advance(by: .seconds(30))
+        await stopping.value
+        harness.confirm("!a")
+
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
+    }
+
+    @Test
+    func aNewShareInTheSameRoomDropsAPendingStopRetry() async throws {
+        let harness = Harness()
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        harness.room("!a").stopLiveLocationShareReturnValue = .failure(.beaconNotReady)
+        let stopping = Task { await harness.service.stop() }
+        try await waitUntil { harness.clock.deadlines == [.seconds(30)] }
+
+        // The new share replaces the old one (same state key), so a late stop would only end the new one.
+        harness.room("!a").startLiveLocationShareDurationReturnValue = .success("$beacon-!a-2")
+        _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
+        await stopping.value
+        harness.confirm("!a")
+
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
+        #expect(harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(900), isPaused: false))
+    }
+
+    @Test
+    func losingLocationAccessEndsTheShare() async throws {
+        let harness = try await Harness.sharing()
+
+        harness.locationProvider.authorization = .denied
+        harness.authorization.send(.denied)
+
+        try await waitUntil { harness.service.state == .idle }
+        try await waitUntil { harness.room("!a").stopLiveLocationShareCallsCount == 1 }
+        #expect(harness.locationProvider.stopUpdatesCallsCount == 1)
+        #expect(harness.store.record == nil)
     }
 
     /// Signing out stops before logging out, so a share still starting must not come up afterwards.
@@ -148,7 +285,7 @@ struct LiveLocationServiceTests {
         try await waitUntil { harness.room("!a").startLiveLocationShareDurationCalled }
 
         let stopping = Task { await harness.service.stop() }
-        await settle()
+        await runQueuedMainActorWork()
         await gate.open()
         await stopping.value
 
@@ -171,6 +308,7 @@ struct LiveLocationServiceTests {
         #expect(harness.store.record?.roomID == "!b")
 
         harness.updates.send(.home.movedNorth(metres: 100))
+        harness.confirm("!b")
         try await waitUntil { harness.room("!b").sendLiveLocationCallsCount == 1 }
         #expect(harness.room("!a").sendLiveLocationCallsCount == 1)
     }
@@ -342,6 +480,7 @@ struct LiveLocationServiceTests {
         #expect(harness.service.state == .sharing(roomID: "!b", endsAt: harness.date(900), isPaused: false))
         #expect(harness.store.record?.roomID == "!b")
         harness.updates.send(.home)
+        harness.confirm("!b")
         try await waitUntil { harness.room("!b").sendLiveLocationCallsCount == 1 }
         #expect(harness.room("!a").sendLiveLocationCallsCount == 0)
     }
@@ -355,7 +494,7 @@ struct LiveLocationServiceTests {
         let restoring = Task { await harness.service.restore() }
         try await waitUntil { harness.clock.sleeperCount == 1 }
         let starting = Task { await harness.service.start(roomID: "!b", duration: .seconds(900)) }
-        await settle()
+        await runQueuedMainActorWork()
         #expect(harness.room("!b").startLiveLocationShareDurationCalled == false)
 
         harness.liveLocations("!a").send([.own(beaconID: "$beacon-!a", endDate: harness.date(600))])
@@ -375,11 +514,13 @@ struct LiveLocationServiceTests {
         harness.room("!a").sendLiveLocationReturnValue = .failure(.sdkError("failed"))
         _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
         harness.updates.send(.home)
+        harness.confirm("!a")
 
         try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 1 }
         harness.clock.advance(by: .seconds(30))
         try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 2 }
-        await settle()
+        // Timed once the second failure is handled.
+        try await waitUntil { harness.clock.deadlines == [.seconds(60)] }
         #expect(harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(900), isPaused: false))
 
         harness.clock.advance(by: .seconds(30))
@@ -459,12 +600,13 @@ struct LiveLocationServiceTests {
 
     // MARK: - Helpers
 
-    /// Lets main-actor tasks and the mocks' concurrent calls run, for checks that something did not happen.
-    private func settle() async {
+    /// Lets tasks already queued on the main actor (e.g. a `Task` calling into the service) run up to their
+    /// first suspension. Checks that something did *not* happen use deterministic signals instead (clock
+    /// deadlines, subscriptions), since the mocks' calls hop off the main actor.
+    private func runQueuedMainActorWork() async {
         for _ in 0..<10 {
             await Task.yield()
         }
-        try? await Task.sleep(for: .milliseconds(5))
     }
 }
 
@@ -475,17 +617,19 @@ private final class Harness {
     let startDate = Date(timeIntervalSince1970: 1_700_000_000)
     let locationProvider = LocationProviderMock()
     let updates = PassthroughSubject<GeoURI, Never>()
+    let authorization = CurrentValueSubject<LocationAuthorization, Never>(.authorized)
     let ownBeaconInfo = PassthroughSubject<OwnBeaconInfo, Never>()
     let store = InMemoryLiveLocationShareStore()
     var unavailableRoomIDs: Set<String> = []
     private(set) var requestedRoomIDs: [String] = []
+    private(set) var updatesSubscriberCount = 0
     private var rooms: [String: RoomLocationProxyMock] = [:]
     private var liveLocationSubjects: [String: CurrentValueSubject<[LiveLocationSummary], Never>] = [:]
     private(set) var service: LiveLocationService!
 
     init() {
         locationProvider.authorization = .authorized
-        locationProvider.updatesPublisher = updates.eraseToAnyPublisher()
+        locationProvider.authorizationPublisher = authorization.eraseToAnyPublisher()
         for roomID in ["!a", "!b"] {
             let subject = CurrentValueSubject<[LiveLocationSummary], Never>([])
             let room = RoomLocationProxyMock()
@@ -497,6 +641,11 @@ private final class Harness {
             rooms[roomID] = room
             liveLocationSubjects[roomID] = subject
         }
+
+        locationProvider.updatesPublisher = updates
+            .handleEvents(receiveSubscription: { [weak self] _ in self?.updatesSubscriberCount += 1 },
+                          receiveCancel: { [weak self] in self?.updatesSubscriberCount -= 1 })
+            .eraseToAnyPublisher()
 
         let clock = clock, startDate = startDate
         service = LiveLocationService(ownUserID: Self.ownUserID,
@@ -516,8 +665,14 @@ private final class Harness {
         let harness = Harness()
         _ = await harness.service.start(roomID: "!a", duration: .seconds(900))
         harness.updates.send(.home)
+        harness.confirm("!a")
         try await waitUntil { harness.room("!a").sendLiveLocationCallsCount == 1 }
         return harness
+    }
+
+    /// Sync delivering our new share as live, which the SDK needs before it can send updates or stop it.
+    func confirm(_ roomID: String, eventID: String? = nil) {
+        ownBeaconInfo.send(OwnBeaconInfo(roomID: roomID, eventID: eventID ?? "$beacon-\(roomID)", isLive: true))
     }
 
     func room(_ roomID: String) -> RoomLocationProxyMock {

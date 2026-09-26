@@ -9,6 +9,8 @@ import Combine
 import MatrixRustSDK
 
 enum LocationProxyError: Error, Equatable {
+    /// The SDK's synced state doesn't have our live `beacon_info` (yet): it sends and stops against that state.
+    case beaconNotReady
     case sdkError(String)
 }
 
@@ -74,7 +76,7 @@ final class RoomLocationProxy: RoomLocationProxyProtocol {
         } catch {
             // Only the type: the SDK's message could echo the geo URI.
             MXLog.error("Sending a live location update failed: \(type(of: error))")
-            return .failure(.sdkError(error.localizedDescription))
+            return .failure(Self.mapBeaconError(error))
         }
     }
 
@@ -85,7 +87,14 @@ final class RoomLocationProxy: RoomLocationProxyProtocol {
             return .success(())
         } catch {
             MXLog.error("Stopping a live location share failed: \(type(of: error))")
-            return .failure(.sdkError(error.localizedDescription))
+            return .failure(Self.mapBeaconError(error))
+        }
+    }
+
+    private static func mapBeaconError(_ error: any Error) -> LocationProxyError {
+        switch error as? LiveLocationError {
+        case .NotFound, .NotLive: .beaconNotReady
+        default: .sdkError(error.localizedDescription)
         }
     }
 }

@@ -29,6 +29,9 @@ import SwiftUI
     @ObservationIgnored private var locationServices: LocationServices?
     @ObservationIgnored private var liveLocationRestoreCancellable: AnyCancellable?
     @ObservationIgnored private var liveLocationRestoreTask: Task<Void, Never>?
+    @ObservationIgnored private var liveLocationStateCancellable: AnyCancellable?
+    /// The SDK sends and stops our live share against the `beacon_info` it last synced, so sync runs throughout.
+    @ObservationIgnored private var isSharingLiveLocation = false
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var isActive = false
     @ObservationIgnored private var isStarting = false
@@ -38,6 +41,10 @@ import SwiftUI
     @ObservationIgnored private var lifecycleGeneration = 0
     private var authenticationFlow: AuthenticationFlowCoordinator?
     private var userSessionFlow: UserSessionFlowCoordinator?
+
+    private var shouldSync: Bool {
+        isActive || isSharingLiveLocation
+    }
 
     fileprivate var currentView: AnyView {
         switch phase {
@@ -70,10 +77,12 @@ import SwiftUI
         }
     }
 
-    /// Any phase other than `.active` (e.g. `.inactive`, which watchOS delivers first when the wrist lowers) stops sync.
-    func handleScenePhase(_ scenePhase: ScenePhase) {
+    /// Any phase other than `.active` (e.g. `.inactive`, which watchOS delivers first when the wrist lowers)
+    /// stops sync, unless a live location share is running.
+    @discardableResult
+    func handleScenePhase(_ scenePhase: ScenePhase) -> Task<Void, Never> {
         isActive = scenePhase == .active
-        scheduleSyncTransition(shouldRun: isActive)
+        return scheduleSyncTransition(shouldRun: shouldSync)
     }
 
     func signOut() async {
@@ -126,6 +135,7 @@ import SwiftUI
         // Before sync starts, so the live share sees every update to our own shares.
         let locationServices = makeLocationServices(clientProxy)
         self.locationServices = locationServices
+        observeLiveLocationState(locationServices.liveLocationService)
         restoreLiveLocation(locationServices.liveLocationService, roomSummaryProvider: clientProxy.roomSummaryProvider)
 
         let flow = UserSessionFlowCoordinator(clientProxy: clientProxy, locationServices: locationServices, showsVerificationOnStart: needsVerification)
@@ -142,7 +152,7 @@ import SwiftUI
 
         // Cached chats show straight away, without waiting for sync (i.e. an `.active` scene phase).
         Task { await clientProxy.roomSummaryProvider.start() }
-        scheduleSyncTransition(shouldRun: isActive)
+        scheduleSyncTransition(shouldRun: shouldSync)
     }
 
     private func clearSession() {
@@ -150,6 +160,16 @@ import SwiftUI
         teardownSync(of: clientProxy, wasRunning: isSyncRunning)
         sessionStore.clear()
         showAuthentication()
+    }
+
+    private func observeLiveLocationState(_ liveLocationService: LiveLocationServiceProtocol) {
+        liveLocationStateCancellable = liveLocationService.statePublisher
+            .map { $0 != .idle }
+            .sink { [weak self] isSharing in
+                guard let self, isSharing != isSharingLiveLocation else { return }
+                isSharingLiveLocation = isSharing
+                scheduleSyncTransition(shouldRun: shouldSync)
+            }
     }
 
     /// Resumes a share from before a relaunch straight away, and again once the room list has loaded
@@ -169,6 +189,8 @@ import SwiftUI
         let liveLocationService = locationServices?.liveLocationService
         let restoreTask = liveLocationRestoreTask
         locationServices = nil
+        liveLocationStateCancellable = nil
+        isSharingLiveLocation = false
         liveLocationRestoreCancellable = nil
         liveLocationRestoreTask = nil
         return Task {
