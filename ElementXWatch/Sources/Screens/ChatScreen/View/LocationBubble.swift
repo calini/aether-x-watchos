@@ -55,6 +55,8 @@ struct LocationBubble: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
+            // Combining drops the preview's tap gesture, so VoiceOver needs its own way to open the map.
+            .accessibilityAction(.default, onTap)
             // Outside the combined element, so VoiceOver reaches it as its own button.
             if let onStop {
                 StopLiveLocationButton(action: onStop)

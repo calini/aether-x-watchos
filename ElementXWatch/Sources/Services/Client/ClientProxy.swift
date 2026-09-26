@@ -75,7 +75,7 @@ final class ClientProxy: ClientProxyProtocol {
                 self?.ownBeaconInfoSubject.send(OwnBeaconInfo(update))
             })
         } catch {
-            MXLog.error("Failed subscribing to own beacon info updates: \(error)")
+            MXLog.error("Failed subscribing to own beacon info updates: \(type(of: error))")
         }
 
         delegateHandle = try client.setDelegate(delegate: ClientDelegateForwarder { [weak self] isSoftLogout in
@@ -155,7 +155,7 @@ final class ClientProxy: ClientProxyProtocol {
             await proxy.start()
             return proxy
         } catch {
-            MXLog.error("Failed getting the room for location sharing in \(roomID): \(error)")
+            MXLog.error("Failed getting the room for location sharing in \(roomID): \(type(of: error))")
             return nil
         }
     }

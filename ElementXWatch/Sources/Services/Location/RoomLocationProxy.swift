@@ -51,7 +51,7 @@ final class RoomLocationProxy: RoomLocationProxyProtocol {
         liveLocationsHandle = observer.subscribe(listener: SDKListener<[LiveLocationShareUpdate]>.onMainActor { [weak self] updates in
             guard let self else { return }
             let summaries = LiveLocationSummaries.apply(updates, to: liveLocationsSubject.value)
-            MXLog.info("Live location shares in the room: \(summaries.count)")
+            MXLog.verbose("Live location shares in \(roomID): \(summaries.count)")
             liveLocationsSubject.send(summaries)
         })
     }

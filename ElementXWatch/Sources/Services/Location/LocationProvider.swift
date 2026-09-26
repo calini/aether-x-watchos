@@ -197,8 +197,9 @@ extension LocationProvider: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error) {
-        MXLog.error("Location request failed: \(error)")
         let code = (error as? CLError)?.code
+        // Only the code: the error's description isn't ours to vouch for.
+        MXLog.error("Location request failed: \(code.map { "CLError \($0.rawValue)" } ?? "\(type(of: error))")")
         // Transient during continuous updates: the next fix (or the timeout) settles pending requests.
         if isUpdating, code == .locationUnknown { return }
         finishAllFixes(with: .failure(code == .denied ? .denied : .failed))
