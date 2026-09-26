@@ -52,6 +52,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: io.ilie.elementx.watch
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         OTHER_LDFLAGS: ["-ObjC"]
+        # XcodeGen sets no runpath for watch-only apps, so embedded package frameworks fail to load on device.
+        LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path/Frameworks"]
     preBuildScripts:
       - name: Sourcery
         basedOnDependencyAnalysis: false
