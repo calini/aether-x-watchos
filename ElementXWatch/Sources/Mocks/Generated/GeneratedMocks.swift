@@ -601,6 +601,117 @@ nonisolated class KeychainStoreMock: KeychainStoreProtocol, @unchecked Sendable 
         removeRestorationTokenClosure?()
     }
 }
+nonisolated class LocationProviderMock: LocationProviderProtocol, @unchecked Sendable {
+    var authorization: LocationAuthorization {
+        get { return underlyingAuthorization }
+        set(value) { underlyingAuthorization = value }
+    }
+    nonisolated(unsafe) var underlyingAuthorization: LocationAuthorization!
+    var authorizationPublisher: AnyPublisher<LocationAuthorization, Never> {
+        get { return underlyingAuthorizationPublisher }
+        set(value) { underlyingAuthorizationPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingAuthorizationPublisher: AnyPublisher<LocationAuthorization, Never>!
+    var updatesPublisher: AnyPublisher<GeoURI, Never> {
+        get { return underlyingUpdatesPublisher }
+        set(value) { underlyingUpdatesPublisher = value }
+    }
+    nonisolated(unsafe) var underlyingUpdatesPublisher: AnyPublisher<GeoURI, Never>!
+
+    //MARK: - requestAuthorization
+
+    private let requestAuthorizationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var requestAuthorizationUnderlyingCallsCount = 0
+    var requestAuthorizationCallsCount: Int {
+        get { requestAuthorizationCallsCountLock.withLock { requestAuthorizationUnderlyingCallsCount } }
+        set { requestAuthorizationCallsCountLock.withLock { requestAuthorizationUnderlyingCallsCount = newValue } }
+    }
+    var requestAuthorizationCalled: Bool {
+        return requestAuthorizationCallsCount > 0
+    }
+    nonisolated(unsafe) var requestAuthorizationClosure: (() -> Void)?
+
+    func requestAuthorization() {
+        requestAuthorizationCallsCountLock.withLock { requestAuthorizationUnderlyingCallsCount += 1 }
+        requestAuthorizationClosure?()
+    }
+    //MARK: - currentLocation
+
+    private let currentLocationTimeoutCallsCountLock = NSLock()
+    private nonisolated(unsafe) var currentLocationTimeoutUnderlyingCallsCount = 0
+    var currentLocationTimeoutCallsCount: Int {
+        get { currentLocationTimeoutCallsCountLock.withLock { currentLocationTimeoutUnderlyingCallsCount } }
+        set { currentLocationTimeoutCallsCountLock.withLock { currentLocationTimeoutUnderlyingCallsCount = newValue } }
+    }
+    var currentLocationTimeoutCalled: Bool {
+        return currentLocationTimeoutCallsCount > 0
+    }
+    private let currentLocationTimeoutReceivedTimeoutLock = NSLock()
+    private nonisolated(unsafe) var currentLocationTimeoutUnderlyingReceivedTimeout: Duration?
+    var currentLocationTimeoutReceivedTimeout: Duration? {
+        get { currentLocationTimeoutReceivedTimeoutLock.withLock { currentLocationTimeoutUnderlyingReceivedTimeout } }
+        set { currentLocationTimeoutReceivedTimeoutLock.withLock { currentLocationTimeoutUnderlyingReceivedTimeout = newValue } }
+    }
+    private let currentLocationTimeoutReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var currentLocationTimeoutUnderlyingReceivedInvocations: [Duration] = []
+    var currentLocationTimeoutReceivedInvocations: [Duration] {
+        get { currentLocationTimeoutReceivedInvocationsLock.withLock { currentLocationTimeoutUnderlyingReceivedInvocations } }
+        set { currentLocationTimeoutReceivedInvocationsLock.withLock { currentLocationTimeoutUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let currentLocationTimeoutReturnValueLock = NSLock()
+    private nonisolated(unsafe) var currentLocationTimeoutUnderlyingReturnValue: Result<GeoURI, LocationError>!
+    var currentLocationTimeoutReturnValue: Result<GeoURI, LocationError>! {
+        get { currentLocationTimeoutReturnValueLock.withLock { currentLocationTimeoutUnderlyingReturnValue } }
+        set { currentLocationTimeoutReturnValueLock.withLock { currentLocationTimeoutUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var currentLocationTimeoutClosure: ((Duration) async -> Result<GeoURI, LocationError>)?
+
+    @concurrent func currentLocation(timeout: Duration) async -> Result<GeoURI, LocationError> {
+        currentLocationTimeoutCallsCountLock.withLock { currentLocationTimeoutUnderlyingCallsCount += 1 }
+        currentLocationTimeoutReceivedTimeout = timeout
+        currentLocationTimeoutReceivedInvocationsLock.withLock { currentLocationTimeoutUnderlyingReceivedInvocations.append(timeout) }
+        if let currentLocationTimeoutClosure = currentLocationTimeoutClosure {
+            return await currentLocationTimeoutClosure(timeout)
+        } else {
+            return currentLocationTimeoutReturnValue
+        }
+    }
+    //MARK: - startUpdates
+
+    private let startUpdatesCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startUpdatesUnderlyingCallsCount = 0
+    var startUpdatesCallsCount: Int {
+        get { startUpdatesCallsCountLock.withLock { startUpdatesUnderlyingCallsCount } }
+        set { startUpdatesCallsCountLock.withLock { startUpdatesUnderlyingCallsCount = newValue } }
+    }
+    var startUpdatesCalled: Bool {
+        return startUpdatesCallsCount > 0
+    }
+    nonisolated(unsafe) var startUpdatesClosure: (() -> Void)?
+
+    func startUpdates() {
+        startUpdatesCallsCountLock.withLock { startUpdatesUnderlyingCallsCount += 1 }
+        startUpdatesClosure?()
+    }
+    //MARK: - stopUpdates
+
+    private let stopUpdatesCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopUpdatesUnderlyingCallsCount = 0
+    var stopUpdatesCallsCount: Int {
+        get { stopUpdatesCallsCountLock.withLock { stopUpdatesUnderlyingCallsCount } }
+        set { stopUpdatesCallsCountLock.withLock { stopUpdatesUnderlyingCallsCount = newValue } }
+    }
+    var stopUpdatesCalled: Bool {
+        return stopUpdatesCallsCount > 0
+    }
+    nonisolated(unsafe) var stopUpdatesClosure: (() -> Void)?
+
+    func stopUpdates() {
+        stopUpdatesCallsCountLock.withLock { stopUpdatesUnderlyingCallsCount += 1 }
+        stopUpdatesClosure?()
+    }
+}
 nonisolated class QRLoginServiceMock: QRLoginServiceProtocol, @unchecked Sendable {
 
     //MARK: - loginWithGeneratedQRCode

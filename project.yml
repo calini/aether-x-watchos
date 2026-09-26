@@ -51,6 +51,8 @@ targets:
         WKApplication: true
         WKWatchOnly: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocationWhenInUseUsageDescription: Share your location in chats.
+        UIBackgroundModes: [location]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ilie.elementx.watch
