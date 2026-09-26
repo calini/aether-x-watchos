@@ -109,6 +109,16 @@ final class ClientProxy: ClientProxyProtocol {
         }
     }
 
+    /// Fetches the whole original media file (decrypting it first if needed), unlike `loadThumbnail`'s server-side resize.
+    func loadMediaContent(for source: MediaSourceProxy) async -> Data? {
+        do {
+            return try await client.getMediaContent(mediaSource: source.source)
+        } catch {
+            MXLog.error("Failed loading media content: \(error)")
+            return nil
+        }
+    }
+
     func timelineProxy(for roomID: String) async -> TimelineProxyProtocol? {
         do {
             let roomListService = syncService.roomListService()

@@ -7,11 +7,13 @@
 
 import SwiftUI
 
-/// Loads media thumbnails for views without handing them the whole client.
+/// Loads media for views without handing them the whole client.
 struct MediaLoader {
     let loadThumbnail: (MediaSourceProxy, Int, Int) async -> Data?
+    /// Fetches the whole original file, e.g. for a full-screen viewer that needs more detail than a thumbnail.
+    let loadContent: (MediaSourceProxy) async -> Data?
 }
 
 extension EnvironmentValues {
-    @Entry var mediaLoader = MediaLoader { _, _, _ in nil }
+    @Entry var mediaLoader = MediaLoader(loadThumbnail: { _, _, _ in nil }, loadContent: { _ in nil })
 }

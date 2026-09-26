@@ -8,6 +8,10 @@
 import SwiftUI
 
 struct ImageThumbnail: View {
+    /// Full sharpness at the viewer's 4× max zoom, while keeping a 12 MP original's decode under ~12 MB.
+    /// `nonisolated` so the background decode task (off the main actor) can read it directly.
+    private nonisolated static let fullScreenMaxPixelSize: CGFloat = 2048
+
     let image: ImageBody
 
     @Environment(\.mediaLoader) private var mediaLoader
@@ -40,7 +44,11 @@ struct ImageThumbnail: View {
         .fullScreenCover(isPresented: $isShowingFullScreen) {
             if let uiImage {
                 ImageViewer(image: uiImage, caption: image.caption) { [mediaLoader, source = image.source] in
-                    await mediaLoader.loadThumbnail(source, 1000, 1000).flatMap(UIImage.init(data:))
+                    guard let data = await mediaLoader.loadContent(source) else { return nil }
+                    // Decoding a full-size original is CPU-heavy, so it's kept off the main actor.
+                    return await Task.detached {
+                        UIImage.downsampled(from: data, maxPixelSize: Self.fullScreenMaxPixelSize)
+                    }.value
                 }
             }
         }

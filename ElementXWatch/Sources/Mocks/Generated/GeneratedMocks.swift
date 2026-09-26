@@ -345,6 +345,48 @@ nonisolated class ClientProxyMock: ClientProxyProtocol, @unchecked Sendable {
             return loadThumbnailForWidthHeightReturnValue
         }
     }
+    //MARK: - loadMediaContent
+
+    private let loadMediaContentForCallsCountLock = NSLock()
+    private nonisolated(unsafe) var loadMediaContentForUnderlyingCallsCount = 0
+    var loadMediaContentForCallsCount: Int {
+        get { loadMediaContentForCallsCountLock.withLock { loadMediaContentForUnderlyingCallsCount } }
+        set { loadMediaContentForCallsCountLock.withLock { loadMediaContentForUnderlyingCallsCount = newValue } }
+    }
+    var loadMediaContentForCalled: Bool {
+        return loadMediaContentForCallsCount > 0
+    }
+    private let loadMediaContentForReceivedSourceLock = NSLock()
+    private nonisolated(unsafe) var loadMediaContentForUnderlyingReceivedSource: MediaSourceProxy?
+    var loadMediaContentForReceivedSource: MediaSourceProxy? {
+        get { loadMediaContentForReceivedSourceLock.withLock { loadMediaContentForUnderlyingReceivedSource } }
+        set { loadMediaContentForReceivedSourceLock.withLock { loadMediaContentForUnderlyingReceivedSource = newValue } }
+    }
+    private let loadMediaContentForReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var loadMediaContentForUnderlyingReceivedInvocations: [MediaSourceProxy] = []
+    var loadMediaContentForReceivedInvocations: [MediaSourceProxy] {
+        get { loadMediaContentForReceivedInvocationsLock.withLock { loadMediaContentForUnderlyingReceivedInvocations } }
+        set { loadMediaContentForReceivedInvocationsLock.withLock { loadMediaContentForUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let loadMediaContentForReturnValueLock = NSLock()
+    private nonisolated(unsafe) var loadMediaContentForUnderlyingReturnValue: Data?
+    var loadMediaContentForReturnValue: Data? {
+        get { loadMediaContentForReturnValueLock.withLock { loadMediaContentForUnderlyingReturnValue } }
+        set { loadMediaContentForReturnValueLock.withLock { loadMediaContentForUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var loadMediaContentForClosure: ((MediaSourceProxy) async -> Data?)?
+
+    @concurrent func loadMediaContent(for source: MediaSourceProxy) async -> Data? {
+        loadMediaContentForCallsCountLock.withLock { loadMediaContentForUnderlyingCallsCount += 1 }
+        loadMediaContentForReceivedSource = source
+        loadMediaContentForReceivedInvocationsLock.withLock { loadMediaContentForUnderlyingReceivedInvocations.append(source) }
+        if let loadMediaContentForClosure = loadMediaContentForClosure {
+            return await loadMediaContentForClosure(source)
+        } else {
+            return loadMediaContentForReturnValue
+        }
+    }
     //MARK: - timelineProxy
 
     private let timelineProxyForCallsCountLock = NSLock()

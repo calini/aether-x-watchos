@@ -79,9 +79,11 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
                                             destination: { [weak self] route in self?.destination(for: route) ?? AnyView(EmptyView()) },
                                             onPathChange: { [weak self] in self?.pruneChildCoordinators() },
                                             onVerificationDismissed: { [weak self] in self?.dismissVerification() })
-            .environment(\.mediaLoader, MediaLoader { source, width, height in
+            .environment(\.mediaLoader, MediaLoader(loadThumbnail: { source, width, height in
                 await clientProxy.loadThumbnail(for: source, width: width, height: height)
-            }))
+            }, loadContent: { source in
+                await clientProxy.loadMediaContent(for: source)
+            })))
     }
 
     /// The controller is fetched when the user taps Start: right after a password sign-in it isn't
