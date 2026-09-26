@@ -122,6 +122,11 @@ nonisolated enum WatchStrings {
     static let stop = "Stop"
     static let liveLocationPaused = "Live location paused, retrying…"
 
+    /// A location message's plain-text body, for clients that can't show a map (same as element-x-ios).
+    static func locationWasShared(at geoURI: String) -> String {
+        "Location was shared at \(geoURI)"
+    }
+
     static func replaceLiveShareTitle(roomName: String) -> String {
         "Stop sharing in \(roomName) and share here instead?"
     }

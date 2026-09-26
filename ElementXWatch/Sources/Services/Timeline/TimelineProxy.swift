@@ -93,8 +93,9 @@ final class TimelineProxy: TimelineProxyProtocol {
 
     func sendLocation(_ geoURI: GeoURI, description: String?) async -> Result<Void, TimelineProxyError> {
         do {
-            try await timeline.sendLocation(body: "Location", geoUri: geoURI.string, description: description,
-                                            zoomLevel: nil, assetType: .sender, repliedToEventId: nil)
+            let geoURIString = geoURI.string
+            try await timeline.sendLocation(body: WatchStrings.locationWasShared(at: geoURIString), geoUri: geoURIString,
+                                            description: description, zoomLevel: nil, assetType: .sender, repliedToEventId: nil)
             return .success(())
         } catch {
             // Only the type: the SDK's message could echo the geo URI.

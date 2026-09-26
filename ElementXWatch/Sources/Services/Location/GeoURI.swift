@@ -40,7 +40,23 @@ struct GeoURI: Equatable {
     }
 
     var string: String {
-        guard let uncertainty else { return "geo:\(latitude),\(longitude)" }
-        return "geo:\(latitude),\(longitude);u=\(Int(uncertainty))"
+        let coordinates = "geo:\(Self.decimalString(latitude)),\(Self.decimalString(longitude))"
+        guard let uncertainty else { return coordinates }
+        return "\(coordinates);u=\(Int(uncertainty))"
+    }
+
+    /// Fixed-point with up to 6 decimals (~0.1 m): interpolating a `Double` prints e.g. `-5e-05`, which
+    /// isn't valid in a geo URI. `String(format:)` without a locale always uses a "." separator.
+    private static func decimalString(_ value: Double) -> String {
+        var string = String(format: "%.6f", value)
+        if string.contains(".") {
+            while string.hasSuffix("0") {
+                string.removeLast()
+            }
+            if string.hasSuffix(".") {
+                string.removeLast()
+            }
+        }
+        return string == "-0" ? "0" : string
     }
 }
