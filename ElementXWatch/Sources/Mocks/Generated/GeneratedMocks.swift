@@ -9,6 +9,110 @@
 
 import Foundation
 
+nonisolated class AuthenticationServiceMock: AuthenticationServiceProtocol, @unchecked Sendable {
+
+    //MARK: - configure
+
+    private let configureServerCallsCountLock = NSLock()
+    private nonisolated(unsafe) var configureServerUnderlyingCallsCount = 0
+    var configureServerCallsCount: Int {
+        get { configureServerCallsCountLock.withLock { configureServerUnderlyingCallsCount } }
+        set { configureServerCallsCountLock.withLock { configureServerUnderlyingCallsCount = newValue } }
+    }
+    var configureServerCalled: Bool {
+        return configureServerCallsCount > 0
+    }
+    private let configureServerReceivedServerLock = NSLock()
+    private nonisolated(unsafe) var configureServerUnderlyingReceivedServer: String?
+    var configureServerReceivedServer: String? {
+        get { configureServerReceivedServerLock.withLock { configureServerUnderlyingReceivedServer } }
+        set { configureServerReceivedServerLock.withLock { configureServerUnderlyingReceivedServer = newValue } }
+    }
+    private let configureServerReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var configureServerUnderlyingReceivedInvocations: [String] = []
+    var configureServerReceivedInvocations: [String] {
+        get { configureServerReceivedInvocationsLock.withLock { configureServerUnderlyingReceivedInvocations } }
+        set { configureServerReceivedInvocationsLock.withLock { configureServerUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let configureServerReturnValueLock = NSLock()
+    private nonisolated(unsafe) var configureServerUnderlyingReturnValue: Result<LoginOptions, AuthenticationError>!
+    var configureServerReturnValue: Result<LoginOptions, AuthenticationError>! {
+        get { configureServerReturnValueLock.withLock { configureServerUnderlyingReturnValue } }
+        set { configureServerReturnValueLock.withLock { configureServerUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var configureServerClosure: ((String) async -> Result<LoginOptions, AuthenticationError>)?
+
+    @concurrent func configure(server: String) async -> Result<LoginOptions, AuthenticationError> {
+        configureServerCallsCountLock.withLock { configureServerUnderlyingCallsCount += 1 }
+        configureServerReceivedServer = server
+        configureServerReceivedInvocationsLock.withLock { configureServerUnderlyingReceivedInvocations.append(server) }
+        if let configureServerClosure = configureServerClosure {
+            return await configureServerClosure(server)
+        } else {
+            return configureServerReturnValue
+        }
+    }
+    //MARK: - login
+
+    private let loginUsernamePasswordCallsCountLock = NSLock()
+    private nonisolated(unsafe) var loginUsernamePasswordUnderlyingCallsCount = 0
+    var loginUsernamePasswordCallsCount: Int {
+        get { loginUsernamePasswordCallsCountLock.withLock { loginUsernamePasswordUnderlyingCallsCount } }
+        set { loginUsernamePasswordCallsCountLock.withLock { loginUsernamePasswordUnderlyingCallsCount = newValue } }
+    }
+    var loginUsernamePasswordCalled: Bool {
+        return loginUsernamePasswordCallsCount > 0
+    }
+    private let loginUsernamePasswordReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var loginUsernamePasswordUnderlyingReceivedArguments: (username: String, password: String)?
+    var loginUsernamePasswordReceivedArguments: (username: String, password: String)? {
+        get { loginUsernamePasswordReceivedArgumentsLock.withLock { loginUsernamePasswordUnderlyingReceivedArguments } }
+        set { loginUsernamePasswordReceivedArgumentsLock.withLock { loginUsernamePasswordUnderlyingReceivedArguments = newValue } }
+    }
+    private let loginUsernamePasswordReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var loginUsernamePasswordUnderlyingReceivedInvocations: [(username: String, password: String)] = []
+    var loginUsernamePasswordReceivedInvocations: [(username: String, password: String)] {
+        get { loginUsernamePasswordReceivedInvocationsLock.withLock { loginUsernamePasswordUnderlyingReceivedInvocations } }
+        set { loginUsernamePasswordReceivedInvocationsLock.withLock { loginUsernamePasswordUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let loginUsernamePasswordReturnValueLock = NSLock()
+    private nonisolated(unsafe) var loginUsernamePasswordUnderlyingReturnValue: Result<ClientProxyProtocol, AuthenticationError>!
+    var loginUsernamePasswordReturnValue: Result<ClientProxyProtocol, AuthenticationError>! {
+        get { loginUsernamePasswordReturnValueLock.withLock { loginUsernamePasswordUnderlyingReturnValue } }
+        set { loginUsernamePasswordReturnValueLock.withLock { loginUsernamePasswordUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var loginUsernamePasswordClosure: ((String, String) async -> Result<ClientProxyProtocol, AuthenticationError>)?
+
+    @concurrent func login(username: String, password: String) async -> Result<ClientProxyProtocol, AuthenticationError> {
+        loginUsernamePasswordCallsCountLock.withLock { loginUsernamePasswordUnderlyingCallsCount += 1 }
+        loginUsernamePasswordReceivedArguments = (username: username, password: password)
+        loginUsernamePasswordReceivedInvocationsLock.withLock { loginUsernamePasswordUnderlyingReceivedInvocations.append((username: username, password: password)) }
+        if let loginUsernamePasswordClosure = loginUsernamePasswordClosure {
+            return await loginUsernamePasswordClosure(username, password)
+        } else {
+            return loginUsernamePasswordReturnValue
+        }
+    }
+    //MARK: - reset
+
+    private let resetCallsCountLock = NSLock()
+    private nonisolated(unsafe) var resetUnderlyingCallsCount = 0
+    var resetCallsCount: Int {
+        get { resetCallsCountLock.withLock { resetUnderlyingCallsCount } }
+        set { resetCallsCountLock.withLock { resetUnderlyingCallsCount = newValue } }
+    }
+    var resetCalled: Bool {
+        return resetCallsCount > 0
+    }
+    nonisolated(unsafe) var resetClosure: (() -> Void)?
+
+    func reset() {
+        resetCallsCountLock.withLock { resetUnderlyingCallsCount += 1 }
+        resetClosure?()
+    }
+}
 nonisolated class ClientFactoryMock: ClientFactoryProtocol, @unchecked Sendable {
 
     //MARK: - makeLoginClient

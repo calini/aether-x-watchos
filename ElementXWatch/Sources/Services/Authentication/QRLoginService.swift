@@ -8,7 +8,6 @@
 
 import Foundation
 import MatrixRustSDK
-import Security
 
 protocol CheckCodeSending: AnyObject, Sendable {
     func send(code: UInt8) async throws
@@ -79,90 +78,6 @@ enum QRLoginError: Error, Equatable {
 protocol QRLoginServiceProtocol {
     /// Runs the MSC4108 flow where this device shows the QR code. On success the session is saved.
     func loginWithGeneratedQRCode(onProgress: @escaping @MainActor (QRLoginProgress) -> Void) async -> Result<ClientProxyProtocol, QRLoginError>
-}
-
-final class QRLoginService: QRLoginServiceProtocol {
-    private let clientFactory: ClientFactoryProtocol
-    private let sessionStore: SessionStoreProtocol
-
-    init(clientFactory: ClientFactoryProtocol, sessionStore: SessionStoreProtocol) {
-        self.clientFactory = clientFactory
-        self.sessionStore = sessionStore
-    }
-
-    func loginWithGeneratedQRCode(onProgress: @escaping @MainActor (QRLoginProgress) -> Void) async -> Result<ClientProxyProtocol, QRLoginError> {
-        let directories = SessionDirectories()
-        let passphrase = Self.makePassphrase()
-        // Only this attempt's own save should ever be cleared; an error before it must not touch an existing session.
-        var didSaveSession = false
-        // Set once the device exists server-side, so a late cancellation can still sign it out.
-        var approvedClient: Client?
-
-        do {
-            try directories.create()
-            let client = try await clientFactory.makeLoginClient(serverName: WatchAppSettings.defaultServerName,
-                                                                   directories: directories,
-                                                                   passphrase: passphrase)
-            let handler = client.newLoginWithQrCodeHandler(oauthConfiguration: WatchAppSettings.oAuthConfiguration)
-            let listener = SDKListener<GeneratedQrLoginProgress>.onMainActor { progress in
-                if let progress = QRLoginProgress(progress) {
-                    onProgress(progress)
-                }
-            }
-
-            try await handler.generate(progressListener: listener)
-            approvedClient = client
-            try Task.checkCancellation()
-
-            sessionStore.save(RestorationToken(session: try client.session(),
-                                                sessionDirectories: directories,
-                                                passphrase: passphrase,
-                                                pusherNotificationClientIdentifier: nil))
-            didSaveSession = true
-            let userID = try client.userId()
-            MXLog.info("QR login succeeded for \(userID)")
-            return .success(try await ClientProxy.make(client: client))
-        } catch let error as HumanQrLoginError {
-            MXLog.error("QR login failed: \(error)")
-            directories.delete()
-            return .failure(QRLoginError(error))
-        } catch is CancellationError {
-            if let approvedClient {
-                await Self.logOutAbandoned(approvedClient)
-            }
-            directories.delete()
-            return .failure(.cancelled)
-        } catch {
-            MXLog.error("QR login failed unexpectedly: \(error)")
-            if didSaveSession {
-                // clear() already deletes the saved token's directories, which are this attempt's directories.
-                sessionStore.clear()
-            } else {
-                directories.delete()
-            }
-            return .failure(.unknown)
-        }
-    }
-
-    /// Best-effort: runs in its own task so the caller's cancellation doesn't cancel the request too.
-    private static func logOutAbandoned(_ client: Client) async {
-        MXLog.info("QR login cancelled after approval, signing the new device out")
-        await Task {
-            do {
-                try await client.logout()
-            } catch {
-                MXLog.error("Signing out the abandoned QR login device failed: \(error)")
-            }
-        }.value
-    }
-
-    private static func makePassphrase() -> Data {
-        var bytes = [UInt8](repeating: 0, count: 32)
-        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
-            fatalError("Unable to generate a secure passphrase")
-        }
-        return Data(bytes)
-    }
 }
 
 extension QRLoginProgress: CustomStringConvertible {

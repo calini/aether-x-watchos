@@ -18,9 +18,10 @@ struct ElementXWatchApp: App {
         let keychainStore = KeychainStore(service: WatchAppSettings.keychainService)
         let sessionStore = SessionStore(keychainStore: keychainStore)
         let clientFactory = ClientFactory(transport: URLSessionTransport(), sessionDelegate: SessionDelegate(keychainStore: keychainStore))
+        let authenticationService = AuthenticationService(clientFactory: clientFactory, sessionStore: sessionStore)
         _appCoordinator = State(initialValue: AppCoordinator(sessionStore: sessionStore,
                                                               restorer: UserSessionRestorer(sessionStore: sessionStore, clientFactory: clientFactory),
-                                                              qrLoginService: QRLoginService(clientFactory: clientFactory, sessionStore: sessionStore)))
+                                                              qrLoginService: authenticationService))
     }
 
     var body: some Scene {

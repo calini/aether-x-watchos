@@ -28,9 +28,15 @@ nonisolated enum WatchStrings {
     static let qrErrorCancelled = "Sign-in was cancelled."
     static let qrErrorInsecure = "The codes didn't match. Try again."
     static let qrErrorLinkingNotSupported = "Your phone can't link devices. Update Element X and turn on Link new device."
-    static let qrErrorServerNotSupported = "Your server doesn't support signing in this way."
+    static let qrErrorServerNotSupported = "This server doesn't support signing in with a QR code."
     static let qrErrorOtherDeviceNotSignedIn = "Element X on your phone isn't signed in."
     static let qrErrorUnknown = "Something went wrong. Try again."
+
+    static let serverUnreachable = "Couldn't reach this server."
+    static let serverNotSupported = "This server isn't supported."
+    static let wrongCredentials = "Wrong username or password."
+    static let rateLimited = "Too many attempts. Try again later."
+    static let signInFailed = "Couldn't sign in. Try again."
 
     static let signInTitle = "Sign in with your iPhone"
     static let signInInstructions = "On your iPhone open Element X → Settings → Link new device → Link desktop computer, then scan the code."
