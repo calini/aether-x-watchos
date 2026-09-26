@@ -25,6 +25,8 @@ import SwiftUI
     @ObservationIgnored private var clientProxy: ClientProxyProtocol?
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var isActive = false
+    @ObservationIgnored private var isStarting = false
+    @ObservationIgnored private var isSigningOut = false
     @ObservationIgnored private var isSyncRunning = false
     @ObservationIgnored private var lifecycleTask: Task<Void, Never>?
     @ObservationIgnored private var lifecycleGeneration = 0
@@ -46,6 +48,8 @@ import SwiftUI
     }
 
     func start() async {
+        guard phase == .launching, !isStarting else { return }
+        isStarting = true
         switch await restorer.restore() {
         case .success(let clientProxy):
             showSession(clientProxy)
@@ -61,6 +65,10 @@ import SwiftUI
     }
 
     func signOut() async {
+        guard !isSigningOut else { return }
+        isSigningOut = true
+        defer { isSigningOut = false }
+
         MXLog.info("Signing out")
         let oldClientProxy = clientProxy
         await teardownSync(of: oldClientProxy, wasRunning: isSyncRunning).value
@@ -113,6 +121,8 @@ import SwiftUI
         userSessionFlow = flow
         phase = .signedIn
 
+        // Cached chats show straight away, without waiting for sync (i.e. an `.active` scene phase).
+        Task { await clientProxy.roomSummaryProvider.start() }
         scheduleSyncTransition(shouldRun: isActive)
     }
 

@@ -28,7 +28,7 @@ struct ElementXWatchApp: App {
             appCoordinator.toPresentable()
                 .task { await appCoordinator.start() }
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .onChange(of: scenePhase, initial: true) { _, newPhase in
             appCoordinator.handleScenePhase(newPhase)
         }
     }

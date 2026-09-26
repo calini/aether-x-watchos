@@ -26,6 +26,8 @@ final class RoomSummaryProvider: RoomSummaryProviderProtocol {
 
     private var rooms: [Room] = []
     private var summariesByID: [String: RoomSummary] = [:]
+    /// Set before the first `await` so overlapping `start()` calls can't both subscribe.
+    private var isStarted = false
     private var controller: RoomListDynamicEntriesController?
     private var entriesHandle: TaskHandle?
     private var refreshTask: Task<Void, Never>?
@@ -44,7 +46,8 @@ final class RoomSummaryProvider: RoomSummaryProviderProtocol {
     }
 
     func start() async {
-        guard entriesHandle == nil else { return }
+        guard !isStarted else { return }
+        isStarted = true
 
         do {
             let roomList = try await roomListService.allRooms()
@@ -57,6 +60,7 @@ final class RoomSummaryProvider: RoomSummaryProviderProtocol {
             _ = controller?.setFilter(kind: Self.filter)
         } catch {
             MXLog.error("Failed starting the room list: \(error)")
+            isStarted = false
         }
     }
 

@@ -95,6 +95,8 @@ final class QRLoginService: QRLoginServiceProtocol {
         let passphrase = Self.makePassphrase()
         // Only this attempt's own save should ever be cleared; an error before it must not touch an existing session.
         var didSaveSession = false
+        // Set once the device exists server-side, so a late cancellation can still sign it out.
+        var approvedClient: Client?
 
         do {
             try directories.create()
@@ -109,6 +111,7 @@ final class QRLoginService: QRLoginServiceProtocol {
             }
 
             try await handler.generate(progressListener: listener)
+            approvedClient = client
             try Task.checkCancellation()
 
             sessionStore.save(RestorationToken(session: try client.session(),
@@ -124,6 +127,9 @@ final class QRLoginService: QRLoginServiceProtocol {
             directories.delete()
             return .failure(QRLoginError(error))
         } catch is CancellationError {
+            if let approvedClient {
+                await Self.logOutAbandoned(approvedClient)
+            }
             directories.delete()
             return .failure(.cancelled)
         } catch {
@@ -136,6 +142,18 @@ final class QRLoginService: QRLoginServiceProtocol {
             }
             return .failure(.unknown)
         }
+    }
+
+    /// Best-effort: runs in its own task so the caller's cancellation doesn't cancel the request too.
+    private static func logOutAbandoned(_ client: Client) async {
+        MXLog.info("QR login cancelled after approval, signing the new device out")
+        await Task {
+            do {
+                try await client.logout()
+            } catch {
+                MXLog.error("Signing out the abandoned QR login device failed: \(error)")
+            }
+        }.value
     }
 
     private static func makePassphrase() -> Data {

@@ -98,6 +98,30 @@ struct AppCoordinatorTests {
     }
 
     @Test
+    func aRestoredSessionStartsTheRoomListWithoutWaitingForSync() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        let provider = try #require(setup.clientProxy.roomSummaryProvider as? RoomSummaryProviderMock)
+
+        await coordinator.start()
+
+        try await waitUntil { provider.startCallsCount == 1 }
+        #expect(setup.clientProxy.startSyncCallsCount == 0)
+    }
+
+    @Test
+    func startingTwiceRestoresOnce() async {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+
+        await coordinator.start()
+        await coordinator.start()
+
+        #expect(restorer.restoreCallsCount == 1)
+        #expect(coordinator.phase == .signedIn)
+    }
+
+    @Test
     func aFailedRestoreFallsBackToSignIn() async {
         let (coordinator, restorer, _, _) = makeCoordinator()
         restorer.restoreReturnValue = .failure(.restoreFailed)
@@ -147,6 +171,24 @@ struct AppCoordinatorTests {
         #expect(setup.clientProxy.logoutCallsCount == 1)
         #expect(sessionStore.clearCallsCount == 1)
         #expect(coordinator.phase == .signedOut)
+    }
+
+    @Test
+    func signingOutTwiceLogsOutOnce() async throws {
+        let (coordinator, restorer, sessionStore, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        let gate = AsyncGate()
+        setup.clientProxy.logoutClosure = { await gate.wait() }
+
+        let firstSignOut = Task { await coordinator.signOut() }
+        try await waitUntil { setup.clientProxy.logoutCallsCount == 1 }
+        await coordinator.signOut()
+        await gate.open()
+        await firstSignOut.value
+
+        #expect(setup.clientProxy.logoutCallsCount == 1)
+        #expect(sessionStore.clearCallsCount == 1)
     }
 
     @Test
