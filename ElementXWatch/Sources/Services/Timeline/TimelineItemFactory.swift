@@ -15,7 +15,7 @@ enum TimelineItemFactory {
         let id = item.uniqueId().id
 
         if let event = item.asEvent() {
-            guard let body = body(for: event.content) else { return TimelineItem(id: id, kind: .hidden) }
+            guard let body = body(for: event.content, senderID: event.sender) else { return TimelineItem(id: id, kind: .hidden) }
             return TimelineItem(id: id, kind: .event(makeEventItem(event, body: body, ownUserID: ownUserID)))
         }
 
@@ -31,7 +31,7 @@ enum TimelineItemFactory {
         }
     }
 
-    static func body(for content: TimelineItemContent) -> TimelineItemBody? {
+    static func body(for content: TimelineItemContent, senderID: String = "") -> TimelineItemBody? {
         guard case .msgLike(let msgLike) = content else { return nil }
 
         switch msgLike.kind {
@@ -48,6 +48,8 @@ enum TimelineItemFactory {
                                          source: MediaSourceProxy(source: image.source),
                                          thumbnailSource: image.info?.thumbnailSource.map(MediaSourceProxy.init),
                                          aspectRatio: aspectRatio(width: image.info?.width, height: image.info?.height)))
+            case .location(let location):
+                return .location(locationBody(from: location))
             default:
                 return .unsupported(RoomSummaryPreview.text(for: content) ?? WatchStrings.unsupportedMessage)
             }
@@ -60,11 +62,25 @@ enum TimelineItemFactory {
             return .redacted
         case .unableToDecrypt:
             return .undecryptable
-        case .poll, .liveLocation:
+        case .liveLocation(let liveLocation):
+            return .liveLocation(liveLocationBody(from: liveLocation, senderID: senderID))
+        case .poll:
             return .unsupported(RoomSummaryPreview.text(for: content) ?? WatchStrings.unsupportedMessage)
         case .other:
             return nil
         }
+    }
+
+    static func locationBody(from content: LocationContent) -> LocationBody {
+        LocationBody(geoURI: GeoURI(string: content.geoUri), description: content.description, body: content.body)
+    }
+
+    static func liveLocationBody(from content: LiveLocationContent, senderID: String) -> LiveLocationBody {
+        let lastLocation = content.locations.last
+        return LiveLocationBody(isLive: content.isLive,
+                                 lastGeoURI: lastLocation.flatMap { GeoURI(string: $0.geoUri) },
+                                 lastUpdate: lastLocation.map { Date(timeIntervalSince1970: TimeInterval($0.ts) / 1000) },
+                                 senderID: senderID)
     }
 
     static func isEdited(_ content: TimelineItemContent) -> Bool {

@@ -59,7 +59,7 @@ enum RoomSummaryPreview {
             case .video: return WatchStrings.video
             case .audio: return WatchStrings.audio
             case .file: return WatchStrings.file
-            case .location: return WatchStrings.location
+            case .location: return "📍 \(WatchStrings.location)"
             case .gallery: return WatchStrings.gallery
             case .other(_, let body): return body
             }
@@ -67,7 +67,7 @@ enum RoomSummaryPreview {
         case .poll(let question, _, _, _, _, _, _): return "📊 \(question)"
         case .redacted: return WatchStrings.messageDeleted
         case .unableToDecrypt: return WatchStrings.waitingForMessage
-        case .liveLocation: return WatchStrings.location
+        case .liveLocation: return "📍 \(WatchStrings.liveLocation)"
         case .other: return nil
         }
     }

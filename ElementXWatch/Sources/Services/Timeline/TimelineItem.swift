@@ -50,6 +50,8 @@ enum TimelineItemBody: Equatable {
     case emote(AttributedString)
     case notice(AttributedString)
     case image(ImageBody)
+    case location(LocationBody)
+    case liveLocation(LiveLocationBody)
     case redacted
     case undecryptable
     case unsupported(String)
@@ -61,6 +63,21 @@ struct ImageBody: Equatable {
     let thumbnailSource: MediaSourceProxy?
     /// Width divided by height, when known.
     let aspectRatio: Double?
+}
+
+struct LocationBody: Equatable {
+    /// `nil` when the geo URI couldn't be parsed.
+    let geoURI: GeoURI?
+    let description: String?
+    let body: String
+}
+
+struct LiveLocationBody: Equatable {
+    let isLive: Bool
+    /// `nil` when no location update has arrived yet or the last one couldn't be parsed.
+    let lastGeoURI: GeoURI?
+    let lastUpdate: Date?
+    let senderID: String
 }
 
 struct ReplyPreview: Equatable {

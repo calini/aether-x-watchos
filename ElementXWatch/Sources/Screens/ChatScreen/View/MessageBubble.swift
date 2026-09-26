@@ -56,6 +56,10 @@ struct MessageBubble: View {
             Text("* \(item.senderName) ").italic() + Text(text).italic()
         case .image(let image):
             ImageThumbnail(image: image)
+        case .location:
+            Label(WatchStrings.location, systemImage: "mappin.and.ellipse")
+        case .liveLocation:
+            Label(WatchStrings.liveLocation, systemImage: "location.fill")
         case .redacted:
             Text(WatchStrings.messageDeleted).italic().foregroundStyle(Color.compound.textSecondary)
         case .undecryptable:
