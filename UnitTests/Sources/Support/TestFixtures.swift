@@ -54,18 +54,29 @@ extension RoomSummary {
 
 extension EventItem {
     static func fixture(eventID: String?, body: String = "Hello", sendState: SendState = .sent, isOwn: Bool = false) -> EventItem {
+        fixture(eventID: eventID, body: .text(AttributedString(body)), sendState: sendState, isOwn: isOwn)
+    }
+
+    static func fixture(eventID: String?, body: TimelineItemBody, sendState: SendState = .sent, isOwn: Bool = false) -> EventItem {
         EventItem(itemID: eventID.map { .eventId(eventId: $0) } ?? .transactionId(transactionId: "txn"),
                   eventID: eventID,
                   senderID: "@bob:example.org",
                   senderName: "Bob",
                   isOwn: isOwn,
                   date: Date(timeIntervalSince1970: 1_700_000_000),
-                  body: .text(AttributedString(body)),
+                  body: body,
                   replyTo: nil,
                   reactions: [],
                   isEdited: false,
                   sendState: sendState,
                   canBeRepliedTo: true)
+    }
+}
+
+extension LiveLocationSummary {
+    static func fixture(userID: String, beaconID: String, geoURI: GeoURI?) -> LiveLocationSummary {
+        LiveLocationSummary(userID: userID, beaconID: beaconID, startDate: .now, endDate: .now.addingTimeInterval(900),
+                            lastGeoURI: geoURI, lastUpdate: .now)
     }
 }
 

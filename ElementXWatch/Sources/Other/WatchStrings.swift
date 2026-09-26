@@ -22,6 +22,9 @@ nonisolated enum WatchStrings {
     static let location = "Location"
     static let liveLocation = "Live location"
     static let liveLocationEnded = "Live location ended"
+    static let live = "Live"
+    static let openInMaps = "Open in Maps"
+    static let locationPlaceholderIcon = "📍"
     static let gallery = "🖼️ Gallery"
     static let sticker = "Sticker"
     static let unsupportedMessage = "Unsupported message"
@@ -101,4 +104,15 @@ nonisolated enum WatchStrings {
     static let couldNotOpenChat = "Couldn't open this chat."
     static let ok = "OK"
     static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+
+    /// "Live · updated 30 s ago", rounded down to seconds, minutes or hours.
+    static func liveUpdated(secondsAgo: Int) -> String {
+        let seconds = max(secondsAgo, 0)
+        let elapsed = switch seconds {
+        case ..<60: "\(seconds) s"
+        case ..<3600: "\(seconds / 60) min"
+        default: "\(seconds / 3600) h"
+        }
+        return "Live · updated \(elapsed) ago"
+    }
 }

@@ -801,6 +801,51 @@ nonisolated class LocationProviderMock: LocationProviderProtocol, @unchecked Sen
         stopUpdatesClosure?()
     }
 }
+nonisolated class MapSnapshotLoaderMock: MapSnapshotLoaderProtocol, @unchecked Sendable {
+
+    //MARK: - snapshot
+
+    private let snapshotOfSizeCallsCountLock = NSLock()
+    private nonisolated(unsafe) var snapshotOfSizeUnderlyingCallsCount = 0
+    var snapshotOfSizeCallsCount: Int {
+        get { snapshotOfSizeCallsCountLock.withLock { snapshotOfSizeUnderlyingCallsCount } }
+        set { snapshotOfSizeCallsCountLock.withLock { snapshotOfSizeUnderlyingCallsCount = newValue } }
+    }
+    var snapshotOfSizeCalled: Bool {
+        return snapshotOfSizeCallsCount > 0
+    }
+    private let snapshotOfSizeReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var snapshotOfSizeUnderlyingReceivedArguments: (geoURI: GeoURI, size: CGSize)?
+    var snapshotOfSizeReceivedArguments: (geoURI: GeoURI, size: CGSize)? {
+        get { snapshotOfSizeReceivedArgumentsLock.withLock { snapshotOfSizeUnderlyingReceivedArguments } }
+        set { snapshotOfSizeReceivedArgumentsLock.withLock { snapshotOfSizeUnderlyingReceivedArguments = newValue } }
+    }
+    private let snapshotOfSizeReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var snapshotOfSizeUnderlyingReceivedInvocations: [(geoURI: GeoURI, size: CGSize)] = []
+    var snapshotOfSizeReceivedInvocations: [(geoURI: GeoURI, size: CGSize)] {
+        get { snapshotOfSizeReceivedInvocationsLock.withLock { snapshotOfSizeUnderlyingReceivedInvocations } }
+        set { snapshotOfSizeReceivedInvocationsLock.withLock { snapshotOfSizeUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let snapshotOfSizeReturnValueLock = NSLock()
+    private nonisolated(unsafe) var snapshotOfSizeUnderlyingReturnValue: UIImage?
+    var snapshotOfSizeReturnValue: UIImage? {
+        get { snapshotOfSizeReturnValueLock.withLock { snapshotOfSizeUnderlyingReturnValue } }
+        set { snapshotOfSizeReturnValueLock.withLock { snapshotOfSizeUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var snapshotOfSizeClosure: ((GeoURI, CGSize) async -> UIImage?)?
+
+    @concurrent func snapshot(of geoURI: GeoURI, size: CGSize) async -> UIImage? {
+        snapshotOfSizeCallsCountLock.withLock { snapshotOfSizeUnderlyingCallsCount += 1 }
+        snapshotOfSizeReceivedArguments = (geoURI: geoURI, size: size)
+        snapshotOfSizeReceivedInvocationsLock.withLock { snapshotOfSizeUnderlyingReceivedInvocations.append((geoURI: geoURI, size: size)) }
+        if let snapshotOfSizeClosure = snapshotOfSizeClosure {
+            return await snapshotOfSizeClosure(geoURI, size)
+        } else {
+            return snapshotOfSizeReturnValue
+        }
+    }
+}
 nonisolated class QRLoginServiceMock: QRLoginServiceProtocol, @unchecked Sendable {
 
     //MARK: - loginWithGeneratedQRCode

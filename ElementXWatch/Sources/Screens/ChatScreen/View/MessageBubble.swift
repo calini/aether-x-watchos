@@ -10,8 +10,11 @@ import SwiftUI
 struct MessageBubble: View {
     let item: EventItem
     let showsSenderName: Bool
+    /// A live share merged with the room's latest data (`ChatScreenViewState.liveLocation(for:)`); `nil` for other messages.
+    let liveLocation: LiveLocationBubbleState?
     let onLongPress: () -> Void
     let onRetry: () -> Void
+    let onShowLocation: () -> Void
 
     var body: some View {
         VStack(alignment: item.isOwn ? .trailing : .leading, spacing: 2) {
@@ -56,10 +59,12 @@ struct MessageBubble: View {
             Text("* \(item.senderName) ").italic() + Text(text).italic()
         case .image(let image):
             ImageThumbnail(image: image)
-        case .location:
-            Label(WatchStrings.location, systemImage: "mappin.and.ellipse")
+        case .location(let location):
+            LocationBubble(content: .location(location), onTap: onShowLocation)
         case .liveLocation:
-            Label(WatchStrings.liveLocation, systemImage: "location.fill")
+            if let liveLocation {
+                LocationBubble(content: .live(liveLocation), onTap: onShowLocation)
+            }
         case .redacted:
             Text(WatchStrings.messageDeleted).italic().foregroundStyle(Color.compound.textSecondary)
         case .undecryptable:

@@ -10,6 +10,8 @@ import SwiftUI
 
 struct ChatScreen: View {
     @Bindable var context: ChatScreenViewModel.Context
+    /// Supplied by the coordinator, which owns the map screen.
+    let locationMap: (LocationMapPresentation) -> AnyView
 
     var body: some View {
         ScrollView {
@@ -29,6 +31,9 @@ struct ChatScreen: View {
                                  onReact: { context.send(viewAction: .react(key: $0, item: item)) },
                                  onReply: { context.send(viewAction: .reply(item)) })
         }
+        .fullScreenCover(item: $context.locationMap) { presentation in
+            locationMap(presentation)
+        }
         .alert(context.viewState.bindings.errorMessage ?? "", isPresented: isShowingError) {
             if context.viewState.draft != nil {
                 Button(WatchStrings.tryAgain) { context.send(viewAction: .retryDraft) }
@@ -45,8 +50,10 @@ struct ChatScreen: View {
         case .event(let event):
             MessageBubble(item: event,
                           showsSenderName: context.viewState.showsSenderNames,
+                          liveLocation: context.viewState.liveLocation(for: event),
                           onLongPress: { context.send(viewAction: .showActions(event)) },
-                          onRetry: { context.send(viewAction: .retry(event)) })
+                          onRetry: { context.send(viewAction: .retry(event)) },
+                          onShowLocation: { context.send(viewAction: .showLocation(event)) })
         case .dateDivider(let date):
             Text(date, format: .dateTime.weekday().day().month())
                 .font(.caption2)
@@ -134,7 +141,7 @@ struct ChatScreen_Previews: PreviewProvider {
             try? await Task.sleep(for: .seconds(999))
             return .success(false)
         }
-        let viewModel = ChatScreenViewModel(roomName: "Bob", isDirect: true, timelineProxy: proxy)
+        let viewModel = ChatScreenViewModel(roomName: "Bob", isDirect: true, timelineProxy: proxy, roomLocationProxy: nil)
         viewModel.state.items = items
         viewModel.state.reachedStart = false
         return viewModel
@@ -159,21 +166,38 @@ struct ChatScreen_Previews: PreviewProvider {
         return viewModel
     }
 
+    static var locations: ChatScreenViewModel {
+        let geoURI = GeoURI(latitude: 51.5072, longitude: -0.1276, uncertainty: nil)
+        return makeViewModel(isDirect: false, items: [
+            makeItem("6", "", own: false, body: .location(LocationBody(geoURI: geoURI, description: "Trafalgar Square", body: ""))),
+            makeItem("7", "", own: false, body: .liveLocation(LiveLocationBody(isLive: true, lastGeoURI: geoURI, lastUpdate: .now.addingTimeInterval(-30),
+                                                                              senderID: "@bob:x"))),
+            makeItem("8", "", own: true, body: .liveLocation(LiveLocationBody(isLive: false, lastGeoURI: geoURI, lastUpdate: .now, senderID: "@me:x")))
+        ])
+    }
+
     static var previews: some View {
-        NavigationStack { ChatScreen(context: makeViewModel(isDirect: true).context) }
+        screen(makeViewModel(isDirect: true))
             .previewDisplayName("DM")
-        NavigationStack { ChatScreen(context: makeViewModel(isDirect: false).context) }
+        screen(makeViewModel(isDirect: false))
             .previewDisplayName("Group")
-        NavigationStack { ChatScreen(context: replying.context) }
+        screen(replying)
             .previewDisplayName("Replying")
-        NavigationStack { ChatScreen(context: loadingOlder.context) }
+        screen(loadingOlder)
             .previewDisplayName("Loading older")
-        NavigationStack { ChatScreen(context: paginationFailed.context) }
+        screen(paginationFailed)
             .previewDisplayName("Pagination failed")
-        NavigationStack { ChatScreen(context: sendingMessage.context) }
+        screen(sendingMessage)
             .previewDisplayName("Sending")
-        NavigationStack { ChatScreen(context: empty.context) }
+        screen(empty)
             .previewDisplayName("Empty")
+        screen(locations)
+            .environment(\.mapSnapshotLoader, MapSnapshotLoader())
+            .previewDisplayName("Locations")
+    }
+
+    static func screen(_ viewModel: ChatScreenViewModel) -> some View {
+        NavigationStack { ChatScreen(context: viewModel.context) { _ in AnyView(EmptyView()) } }
     }
 
     static func makeItem(_ id: String, _ text: String, own: Bool, body: TimelineItemBody? = nil,
@@ -184,12 +208,12 @@ struct ChatScreen_Previews: PreviewProvider {
                                                      replyTo: nil, reactions: reactions, isEdited: false, sendState: sendState, canBeRepliedTo: true)))
     }
 
-    static func makeViewModel(isDirect: Bool) -> ChatScreenViewModel {
+    static func makeViewModel(isDirect: Bool, items: [TimelineItem] = items) -> ChatScreenViewModel {
         let proxy = TimelineProxyMock()
         proxy.itemsPublisher = Just(items).eraseToAnyPublisher()
         // Safe default in case a preview's spinner drives a real `.paginateBackwards` via `.task`.
         proxy.paginateBackwardsReturnValue = .success(false)
-        let viewModel = ChatScreenViewModel(roomName: isDirect ? "Bob" : "Climbing crew", isDirect: isDirect, timelineProxy: proxy)
+        let viewModel = ChatScreenViewModel(roomName: isDirect ? "Bob" : "Climbing crew", isDirect: isDirect, timelineProxy: proxy, roomLocationProxy: nil)
         viewModel.state.items = items
         viewModel.state.reachedStart = true
         return viewModel

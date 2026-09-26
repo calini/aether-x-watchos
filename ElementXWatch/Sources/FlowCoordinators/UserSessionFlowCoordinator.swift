@@ -29,6 +29,8 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
     private let showsVerificationOnStart: Bool
     private let chatsCoordinator: ChatsScreenCoordinator
     private let navigation = Navigation()
+    /// One per session, so its cache outlives each chat.
+    private let mapSnapshotLoader = MapSnapshotLoader()
     private let actionsSubject = PassthroughSubject<UserSessionFlowCoordinatorAction, Never>()
     private var childCoordinators: [UserSessionRoute: CoordinatorProtocol] = [:]
     private var cancellables = Set<AnyCancellable>()
@@ -83,7 +85,8 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
                 await clientProxy.loadThumbnail(for: source, width: width, height: height)
             }, loadContent: { source in
                 await clientProxy.loadMediaContent(for: source)
-            })))
+            }))
+            .environment(\.mapSnapshotLoader, mapSnapshotLoader))
     }
 
     /// The controller is fetched when the user taps Start: right after a password sign-in it isn't
@@ -192,8 +195,11 @@ private final class ChatLoaderCoordinator: CoordinatorProtocol {
 
     func start() {
         Task { [model, roomID, name, isDirect, clientProxy] in
+            // The chat holds this one proxy: every call builds a new observer of the room's live shares.
+            async let roomLocationProxy = clientProxy.roomLocationProxy(for: roomID)
             if let timelineProxy = await clientProxy.timelineProxy(for: roomID) {
-                model.chat = ChatScreenCoordinator(roomName: name, isDirect: isDirect, timelineProxy: timelineProxy)
+                model.chat = await ChatScreenCoordinator(roomName: name, isDirect: isDirect, timelineProxy: timelineProxy,
+                                                         roomLocationProxy: roomLocationProxy)
             } else {
                 model.failed = true
             }

@@ -15,13 +15,18 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
     private var hasAppeared = false
     private var lastReadItemID: String?
 
-    init(roomName: String, isDirect: Bool, timelineProxy: TimelineProxyProtocol) {
+    init(roomName: String, isDirect: Bool, timelineProxy: TimelineProxyProtocol, roomLocationProxy: RoomLocationProxyProtocol?) {
         self.timelineProxy = timelineProxy
         super.init(initialViewState: ChatScreenViewState(roomName: roomName, showsSenderNames: !isDirect))
 
         timelineProxy.itemsPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] items in self?.update(items) }
+            .store(in: &cancellables)
+
+        roomLocationProxy?.liveLocationsPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] liveLocations in self?.state.liveLocations = liveLocations }
             .store(in: &cancellables)
     }
 
@@ -35,6 +40,8 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             send(text)
         case .showActions(let item):
             state.bindings.actionsItem = item
+        case .showLocation(let item):
+            showLocation(item)
         case .reply(let item):
             state.bindings.actionsItem = nil
             state.replyingTo = item
@@ -71,6 +78,27 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         if let last = state.items.last, last.id != lastReadItemID {
             lastReadItemID = last.id
             Task { await timelineProxy.markAsRead() }
+        }
+    }
+
+    private func showLocation(_ item: EventItem) {
+        guard let mode = locationMapMode(for: item) else { return }
+        state.bindings.locationMap = LocationMapPresentation(mode: mode)
+    }
+
+    /// A running live share follows its sender; an ended one shows where it stopped.
+    private func locationMapMode(for item: EventItem) -> LocationMapScreenMode? {
+        switch item.body {
+        case .location(let body):
+            return body.geoURI.map { .location($0, description: body.description) }
+        case .liveLocation(let body):
+            guard let liveLocation = state.liveLocation(for: item) else { return nil }
+            if liveLocation.isLive {
+                return .live(userID: body.senderID)
+            }
+            return liveLocation.geoURI.map { .location($0, description: nil) }
+        default:
+            return nil
         }
     }
 
