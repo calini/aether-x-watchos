@@ -29,7 +29,7 @@ nonisolated final class URLSessionTransport: HttpTransport {
         do {
             let (data, response) = try await session.data(for: urlRequest)
             guard let httpResponse = response as? HTTPURLResponse else {
-                throw HttpTransportError.Network(message: "Received a non-HTTP response")
+                throw HttpTransportError.Network(msg: "Received a non-HTTP response")
             }
             MXLog.verbose("\(request.method) \(path) -> \(httpResponse.statusCode)")
             return HttpTransportResponse(status: UInt16(httpResponse.statusCode),
@@ -40,13 +40,13 @@ nonisolated final class URLSessionTransport: HttpTransport {
         } catch {
             let code = (error as? URLError)?.code.rawValue ?? -1
             MXLog.info("\(request.method) \(path) failed with URLError \(code)")
-            throw HttpTransportError.Network(message: error.localizedDescription)
+            throw HttpTransportError.Network(msg: error.localizedDescription)
         }
     }
 
     static func makeURLRequest(from request: HttpTransportRequest) throws -> URLRequest {
         guard let url = URL(string: request.url), url.scheme != nil else {
-            throw HttpTransportError.Network(message: "Invalid URL")
+            throw HttpTransportError.Network(msg: "Invalid URL")
         }
 
         var urlRequest = URLRequest(url: url)

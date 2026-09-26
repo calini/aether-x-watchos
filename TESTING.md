@@ -2,22 +2,22 @@
 
 ## How to install
 
-1. Build the SDK for devices with the full `Tools/build-sdk.sh` (not `--dev`, which is simulator only; ~12 minutes), then run `xcodegen`.
+1. Check out the `watchos` branch of https://github.com/calini/matrix-rust-sdk at `../matrix-rust-sdk` (or set `MATRIX_RUST_SDK_PATH`). Build the SDK for devices with the full `Tools/build-sdk.sh` (not `--dev`, which is simulator only; ~12 minutes), then run `xcodegen`.
 2. Open `ElementXWatch.xcodeproj` in Xcode.
 3. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM`. Find your Team ID in the Apple Development certificate: `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject` and use the `OU=` value (Xcode doesn't show it for Personal Teams). The value in parentheses in the certificate's `CN=` is **not** the Team ID.
 4. Keep the scheme's Run action on the **Debug** configuration: the transport audit's tripwire proxy (`127.0.0.1:9`) only exists in Debug builds.
 5. Select the watch as the run destination and Run. On a real watch, build from commit `c680eec` (runpath fix) or later.
 6. On the iPhone, in Element X: tap the version number in Settings 7 times, then turn on **Developer options → Link new device**.
 
-Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork: `744352d11` · App: `28c590b`
+Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork: `watchos` @ `229ede199` · App: `28c590b`
 
 ## Measurements
 
 | Item | Value |
 |---|---|
-| Release .app size | 282M |
-| arm64 __TEXT | 76,857,344 bytes (~73.3 MB) |
-| arm64_32 __TEXT (built, not run) | 74,874,880 bytes (~71.4 MB) |
+| Release .app size | 281M |
+| arm64 __TEXT | 76,939,264 bytes (~73.4 MB) |
+| arm64_32 __TEXT (built, not run) | 74,170,368 bytes (~70.7 MB) |
 | Minimum OS per slice | arm64: watchOS 26.0 · arm64_32: watchOS 11.0 (both `LC_BUILD_VERSION`, `xcrun vtool -show-build`) |
 | Peak memory on the chats list (Xcode memory gauge) | |
 | Peak memory in a busy group chat | |
@@ -46,7 +46,7 @@ Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork:
 
 ## Known issues
 
-- Network errors inside the transport currently surface as an SDK panic (`HttpTransportError` is a flat uniffi error). If sync stops after a network change (phone off, Wi-Fi/LTE switch, wrist down/up), note it — fix pending in the SDK fork.
+- Fixed: network errors inside the transport used to surface as an SDK panic (`rustPanic("Can't lift flat errors")`), because `HttpTransportError` was a flat uniffi error. They are now ordinary network errors that the SDK retries. If sync still stops after a network change (phone off, Wi-Fi/LTE switch, wrist down/up), note it under Issues found.
 
 ## Issues found
 
