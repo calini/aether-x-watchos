@@ -37,11 +37,16 @@ Date: 2026-09-26 · Watch: Apple Watch Series 9 (arm64), watchOS __ · SDK fork:
 | 9 | Sign out clears the session and returns to the server screen | | |
 | 10 | Release build including arm64_32 succeeds | | |
 | 11 | Open a chat, go back, open it again quickly: no duplicate timeline or stuck loading (stray chat coordinator check) | | |
+| 12 | *(Optional — N/A if no QR server is available.)* A server that supports QR sign-in still offers and completes QR sign-in on the chosen server. Also: start QR, go back, choose Password — password sign-in works. | | |
 
 ## Transport audit
 
 - [ ] Console (Xcode → Devices → Open Console, filter `io.ilie.elementx.watch`) shows no `127.0.0.1:9` / proxy connection errors during the session.
 - [ ] Rust logs downloaded from the app container (`Library/Caches/Logs/rust*.log`) show no reqwest connection attempts.
+
+## Known issues
+
+- Network errors inside the transport currently surface as an SDK panic (`HttpTransportError` is a flat uniffi error). If sync stops after a network change (phone off, Wi-Fi/LTE switch, wrist down/up), note it — fix pending in the SDK fork.
 
 ## Issues found
 
