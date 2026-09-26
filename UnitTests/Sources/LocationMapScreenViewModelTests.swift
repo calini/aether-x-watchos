@@ -40,7 +40,7 @@ struct LocationMapScreenViewModelTests {
     func liveModeFollowsThatUsersUpdates() async throws {
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: pub),
                                                                          .fixture(userID: "@alice:x", beaconID: "$beacon", geoURI: park)])
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x"), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
 
         try await waitUntil { viewModel.context.viewState.geoURI == pub }
         #expect(viewModel.context.viewState.isLive)
@@ -55,7 +55,7 @@ struct LocationMapScreenViewModelTests {
     @Test
     func liveModeEndsWhenTheUsersShareLeaves() async throws {
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: pub)])
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x"), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(), openInMaps: { _, _ in })
         try await waitUntil { viewModel.context.viewState.geoURI == pub }
 
         shares.send([.fixture(userID: "@alice:x", beaconID: "$beacon", geoURI: park)])
@@ -65,10 +65,46 @@ struct LocationMapScreenViewModelTests {
     }
 
     @Test
+    func liveModeStartsFromTheBubblesPositionAndIgnoresTheListBeforeItsFirstUpdate() async throws {
+        let shares = CurrentValueSubject<[LiveLocationSummary], Never>([])
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: pub), liveLocationsPublisher: shares.eraseToAnyPublisher(),
+                                                   openInMaps: { _, _ in })
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(viewModel.context.viewState.geoURI == pub)
+        #expect(!viewModel.context.viewState.hasEnded)
+
+        shares.send([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: park)])
+
+        try await waitUntil { viewModel.context.viewState.geoURI == park }
+    }
+
+    @Test
+    func liveModeWithoutUpdatesShowsTheBubblesPosition() {
+        var opened: [GeoURI] = []
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: pub), liveLocationsPublisher: nil,
+                                                   openInMaps: { geoURI, _ in opened.append(geoURI) })
+
+        viewModel.context.send(viewAction: .openInMaps)
+
+        #expect(viewModel.context.viewState.geoURI == pub)
+        #expect(!viewModel.context.viewState.hasEnded)
+        #expect(opened == [pub])
+    }
+
+    @Test
+    func liveModeWithNothingToShowIsEndedRatherThanLoading() {
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: nil, openInMaps: { _, _ in })
+
+        #expect(viewModel.context.viewState.geoURI == nil)
+        #expect(viewModel.context.viewState.hasEnded)
+    }
+
+    @Test
     func openInMapsUsesTheCurrentCoordinate() async throws {
         var opened: [(GeoURI, String?)] = []
         let shares = CurrentValueSubject<[LiveLocationSummary], Never>([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: pub)])
-        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x"), liveLocationsPublisher: shares.eraseToAnyPublisher(),
+        let viewModel = LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: nil), liveLocationsPublisher: shares.eraseToAnyPublisher(),
                                                    openInMaps: { opened.append(($0, $1)) })
         shares.send([.fixture(userID: "@bob:x", beaconID: "$beacon", geoURI: park)])
         try await waitUntil { viewModel.context.viewState.geoURI == park }

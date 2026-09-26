@@ -184,7 +184,31 @@ struct ChatScreenViewModelTests {
 
         viewModel.context.send(viewAction: .showLocation(liveItem(isLive: true)))
 
-        #expect(viewModel.context.viewState.bindings.locationMap?.mode == .live(userID: "@bob:example.org"))
+        #expect(viewModel.context.viewState.bindings.locationMap?.mode == .live(userID: "@bob:example.org", initial: park))
+    }
+
+    @Test
+    func showLocationWithoutRoomSharesFollowsFromTheEventsPosition() {
+        let (viewModel, _, _) = makeViewModel()
+
+        viewModel.context.send(viewAction: .showLocation(liveItem(isLive: true)))
+
+        #expect(viewModel.context.viewState.bindings.locationMap?.mode == .live(userID: "@bob:example.org", initial: pub))
+    }
+
+    @Test
+    func aLiveBubbleStaysLiveUntilTheRoomsSharesLoad() async throws {
+        let shares = CurrentValueSubject<[LiveLocationSummary], Never>([])
+        let (viewModel, _, _) = makeViewModel(liveLocations: shares)
+        let item = liveItem(isLive: true)
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(viewModel.context.viewState.liveLocations == nil)
+        #expect(viewModel.context.viewState.liveLocation(for: item)?.isLive == true)
+
+        shares.send([.fixture(userID: "@bob:example.org", beaconID: "$newer", geoURI: park)])
+
+        try await waitUntil { viewModel.context.viewState.liveLocation(for: item)?.isLive == false }
     }
 
     @Test

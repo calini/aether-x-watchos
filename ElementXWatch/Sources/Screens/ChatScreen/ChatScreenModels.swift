@@ -22,7 +22,7 @@ struct ChatScreenViewState: BindableState {
     var replyingTo: EventItem?
     /// A message that failed to send, kept around so it can be retried without retyping it.
     var draft: ChatDraft?
-    /// The room's running live shares; `nil` when they can't be observed, so live bubbles trust their event.
+    /// The room's running live shares; `nil` when they can't be observed or haven't loaded, so live bubbles trust their event.
     var liveLocations: [LiveLocationSummary]?
     var bindings = ChatScreenBindings()
 

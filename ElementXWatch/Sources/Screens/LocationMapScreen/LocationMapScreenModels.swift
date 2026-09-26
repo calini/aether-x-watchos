@@ -7,8 +7,8 @@
 
 enum LocationMapScreenMode: Equatable {
     case location(GeoURI, description: String?)
-    /// Follows the user's live share in the room.
-    case live(userID: String)
+    /// Follows the user's live share in the room, starting from the position the bubble already has.
+    case live(userID: String, initial: GeoURI?)
 }
 
 struct LocationMapScreenViewState: BindableState {

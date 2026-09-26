@@ -6,7 +6,7 @@
 //
 
 @testable import ElementXWatch
-import Foundation
+import SwiftUI
 import Testing
 
 struct MapSnapshotLoaderTests {
@@ -51,9 +51,103 @@ struct MapSnapshotLoaderTests {
         #expect(MapSnapshotLoader.shouldRedraw(from: drawn, to: geo(51.6, -0.1276)))
     }
 
+    @Test
+    func concurrentRequestsForOneKeyShareARender() async throws {
+        let renderer = TestRenderer()
+        let gate = AsyncGate()
+        let loader = MapSnapshotLoader(render: renderer.render(waitingFor: gate))
+
+        let first = Task { await loader.snapshot(of: geo(51.50721, -0.1276), size: size) }
+        let second = Task { await loader.snapshot(of: geo(51.50719, -0.1276), size: size) }
+        try await waitUntil { renderer.count == 1 }
+        await gate.open()
+
+        let firstImage = await first.value
+        let secondImage = await second.value
+        #expect(firstImage != nil)
+        #expect(firstImage === secondImage)
+        #expect(renderer.count == 1)
+    }
+
+    @Test
+    func rendersAtMostTwoAtATime() async throws {
+        let renderer = TestRenderer()
+        let gate = AsyncGate()
+        let loader = MapSnapshotLoader(render: renderer.render(waitingFor: gate))
+
+        let tasks = [51.1, 51.2, 51.3].map { latitude in Task { await loader.snapshot(of: geo(latitude, 0), size: size) } }
+        try await waitUntil { renderer.count == 2 }
+        for _ in 0..<20 { await Task.yield() }
+        #expect(renderer.count == 2)
+
+        await gate.open()
+        for task in tasks {
+            _ = await task.value
+        }
+        #expect(renderer.count == 3)
+    }
+
+    @Test
+    func aCancelledRequestDoesNotRender() async {
+        let renderer = TestRenderer()
+        let loader = MapSnapshotLoader(render: renderer.render(waitingFor: nil))
+
+        let task = Task { await loader.snapshot(of: geo(51.5, 0), size: size) }
+        task.cancel()
+
+        #expect(await task.value == nil)
+        #expect(renderer.count == 0)
+    }
+
+    @Test
+    func theCacheEvictsTheLeastRecentlyUsedImage() async {
+        let renderer = TestRenderer()
+        let loader = MapSnapshotLoader(cacheLimit: 2, render: renderer.render(waitingFor: nil))
+        let (a, b, c) = (geo(51.1, 0), geo(51.2, 0), geo(51.3, 0))
+
+        _ = await loader.snapshot(of: a, size: size)
+        _ = await loader.snapshot(of: b, size: size)
+        _ = await loader.snapshot(of: a, size: size) // A is now more recent than B.
+        _ = await loader.snapshot(of: c, size: size) // Evicts B.
+        _ = await loader.snapshot(of: a, size: size)
+        _ = await loader.snapshot(of: b, size: size)
+
+        #expect(renderer.latitudes == [51.1, 51.2, 51.3, 51.2])
+    }
+
+    @Test
+    func failuresAreNotCached() async {
+        let renderer = TestRenderer(fails: true)
+        let loader = MapSnapshotLoader(render: renderer.render(waitingFor: nil))
+
+        #expect(await loader.snapshot(of: geo(51.5, 0), size: size) == nil)
+        #expect(await loader.snapshot(of: geo(51.5, 0), size: size) == nil)
+        #expect(renderer.count == 2)
+    }
+
     // MARK: - Helpers
 
     private func geo(_ latitude: Double, _ longitude: Double) -> GeoURI {
         GeoURI(latitude: latitude, longitude: longitude, uncertainty: nil)
+    }
+}
+
+/// Counts renders and can hold them open until a gate opens.
+private final class TestRenderer {
+    private let fails: Bool
+    private(set) var latitudes: [Double] = []
+
+    var count: Int { latitudes.count }
+
+    init(fails: Bool = false) {
+        self.fails = fails
+    }
+
+    func render(waitingFor gate: AsyncGate?) -> MapSnapshotLoader.Render {
+        { [self] geoURI, _ in
+            latitudes.append(geoURI.latitude)
+            await gate?.wait()
+            return fails ? nil : UIImage()
+        }
     }
 }

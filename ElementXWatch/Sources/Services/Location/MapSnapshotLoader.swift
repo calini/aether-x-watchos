@@ -31,15 +31,30 @@ struct MapSnapshotKey: Hashable {
 }
 
 final class MapSnapshotLoader: MapSnapshotLoaderProtocol {
+    typealias Render = (GeoURI, CGSize) async -> UIImage?
+
     /// A live bubble only redraws after its sender has moved this far.
     private static let redrawDistance: CLLocationDistance = 25
     private static let regionDistance: CLLocationDistance = 500
-    private static let cacheLimit = 30
     private static let pinSize: CGFloat = 24
 
+    private let cacheLimit: Int
+    private let maxConcurrentRenders: Int
+    private let render: Render
     private var cache: [MapSnapshotKey: UIImage] = [:]
-    /// Oldest first, so the cache drops the least recently added image.
+    /// Least recently used first.
     private var cacheOrder: [MapSnapshotKey] = []
+    /// Requests for a key that is already rendering wait for that render instead of starting another.
+    private var inFlight: [MapSnapshotKey: Task<UIImage?, Never>] = [:]
+    private var activeRenders = 0
+    private var renderSlotWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// `render` is injectable so tests don't need MapKit.
+    init(cacheLimit: Int = 30, maxConcurrentRenders: Int = 2, render: @escaping Render = MapSnapshotLoader.renderWithMapKit) {
+        self.cacheLimit = cacheLimit
+        self.maxConcurrentRenders = maxConcurrentRenders
+        self.render = render
+    }
 
     /// Whether a live bubble drawn at `drawn` should redraw for `latest`: only once it has moved noticeably.
     static func shouldRedraw(from drawn: GeoURI?, to latest: GeoURI?) -> Bool {
@@ -51,21 +66,45 @@ final class MapSnapshotLoader: MapSnapshotLoaderProtocol {
 
     func snapshot(of geoURI: GeoURI, size: CGSize) async -> UIImage? {
         let key = MapSnapshotKey(geoURI: geoURI, size: size)
-        if let image = cache[key] {
+        if let image = cachedImage(for: key) {
             return image
         }
+        if let task = inFlight[key] {
+            return await task.value
+        }
 
+        await acquireRenderSlot()
+        defer { releaseRenderSlot() }
+
+        // Waiting for a slot let other requests run: one may have rendered this key, or the bubble may have gone.
+        if let image = cachedImage(for: key) {
+            return image
+        }
+        if let task = inFlight[key] {
+            return await task.value
+        }
+        guard !Task.isCancelled else { return nil }
+
+        let task = Task { await render(geoURI, size) }
+        inFlight[key] = task
+        let image = await task.value
+        inFlight[key] = nil
+        if let image {
+            store(image, for: key)
+        }
+        return image
+    }
+
+    static func renderWithMapKit(_ geoURI: GeoURI, size: CGSize) async -> UIImage? {
         let coordinate = CLLocationCoordinate2D(latitude: geoURI.latitude, longitude: geoURI.longitude)
         let options = MKMapSnapshotter.Options()
-        options.region = MKCoordinateRegion(center: coordinate, latitudinalMeters: Self.regionDistance, longitudinalMeters: Self.regionDistance)
+        options.region = MKCoordinateRegion(center: coordinate, latitudinalMeters: regionDistance, longitudinalMeters: regionDistance)
         options.size = size
         options.scale = 2
 
         do {
             let snapshot = try await MKMapSnapshotter(options: options).start()
-            let image = Self.drawPin(on: snapshot.image, at: snapshot.point(for: coordinate))
-            store(image, for: key)
-            return image
+            return drawPin(on: snapshot.image, at: snapshot.point(for: coordinate))
         } catch {
             // Only the type: the error could carry the region.
             MXLog.error("Map snapshot failed: \(type(of: error))")
@@ -73,11 +112,40 @@ final class MapSnapshotLoader: MapSnapshotLoaderProtocol {
         }
     }
 
+    private func cachedImage(for key: MapSnapshotKey) -> UIImage? {
+        guard let image = cache[key] else { return nil }
+        markRecentlyUsed(key)
+        return image
+    }
+
     private func store(_ image: UIImage, for key: MapSnapshotKey) {
         cache[key] = image
-        cacheOrder.append(key)
-        if cacheOrder.count > Self.cacheLimit {
+        markRecentlyUsed(key)
+        if cacheOrder.count > cacheLimit {
             cache[cacheOrder.removeFirst()] = nil
+        }
+    }
+
+    /// Moves rather than appends, so each key appears once and eviction never drops a newer entry.
+    private func markRecentlyUsed(_ key: MapSnapshotKey) {
+        cacheOrder.removeAll { $0 == key }
+        cacheOrder.append(key)
+    }
+
+    private func acquireRenderSlot() async {
+        guard activeRenders >= maxConcurrentRenders else {
+            activeRenders += 1
+            return
+        }
+        await withCheckedContinuation { renderSlotWaiters.append($0) }
+    }
+
+    /// Hands the slot straight to the next waiter, so the count stays right.
+    private func releaseRenderSlot() {
+        if renderSlotWaiters.isEmpty {
+            activeRenders -= 1
+        } else {
+            renderSlotWaiters.removeFirst().resume()
         }
     }
 

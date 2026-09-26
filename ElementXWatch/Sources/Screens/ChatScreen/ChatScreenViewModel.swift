@@ -25,6 +25,9 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             .store(in: &cancellables)
 
         roomLocationProxy?.liveLocationsPublisher
+            // The list starts empty before the room's first update (only sent once there are shares), and an empty
+            // list would end every live bubble; until then the bubbles trust their events.
+            .drop { $0.isEmpty }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] liveLocations in self?.state.liveLocations = liveLocations }
             .store(in: &cancellables)
@@ -94,7 +97,7 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         case .liveLocation(let body):
             guard let liveLocation = state.liveLocation(for: item) else { return nil }
             if liveLocation.isLive {
-                return .live(userID: body.senderID)
+                return .live(userID: body.senderID, initial: liveLocation.geoURI)
             }
             return liveLocation.geoURI.map { .location($0, description: nil) }
         default:

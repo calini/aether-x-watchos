@@ -23,11 +23,15 @@ final class LocationMapScreenViewModel: LocationMapScreenViewModelType, Location
             self.description = description
             super.init(initialViewState: LocationMapScreenViewState(geoURI: geoURI, title: description ?? WatchStrings.location,
                                                                     isLive: false, hasEnded: false))
-        case .live(let userID):
+        case .live(let userID, let initial):
             description = nil
-            super.init(initialViewState: LocationMapScreenViewState(geoURI: nil, title: WatchStrings.liveLocation, isLive: true, hasEnded: false))
+            // Without updates or a position there is nothing to wait for, so it shows as ended rather than loading forever.
+            let hasEnded = liveLocationsPublisher == nil && initial == nil
+            super.init(initialViewState: LocationMapScreenViewState(geoURI: initial, title: WatchStrings.liveLocation, isLive: true, hasEnded: hasEnded))
 
             liveLocationsPublisher?
+                // The room's list starts empty before its first update, which would read as ended.
+                .drop { $0.isEmpty }
                 .map { summaries in summaries.first { $0.userID == userID } }
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] summary in self?.update(summary) }

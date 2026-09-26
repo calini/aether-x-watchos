@@ -31,7 +31,7 @@ struct LocationMapScreen: View {
                                                         longitudinalMeters: Self.regionDistance))) {
             if let geoURI = context.viewState.geoURI {
                 Marker(context.viewState.title, coordinate: coordinate(of: geoURI))
-                    .tint(context.viewState.hasEnded ? Color.gray : Color.red)
+                    .tint(context.viewState.hasEnded ? Color.compound.iconSecondary : Color.compound.iconCriticalPrimary)
             }
         }
         .ignoresSafeArea(edges: .bottom)
@@ -68,9 +68,9 @@ struct LocationMapScreen_Previews: PreviewProvider {
     static let location = LocationMapScreenViewModel(mode: .location(geoURI, description: "Trafalgar Square"),
                                                      liveLocationsPublisher: nil,
                                                      openInMaps: { _, _ in })
-    static let live = makeLiveViewModel([[share]])
-    static let liveEnded = makeLiveViewModel([[share], []])
-    static let liveWaiting = makeLiveViewModel([])
+    static let live = makeLiveViewModel([[share]], initial: nil)
+    static let liveEnded = makeLiveViewModel([[share], []], initial: geoURI)
+    static let liveWaiting = makeLiveViewModel([], initial: nil)
 
     static var previews: some View {
         LocationMapScreen(context: location.context)
@@ -83,8 +83,8 @@ struct LocationMapScreen_Previews: PreviewProvider {
             .previewDisplayName("Live, waiting")
     }
 
-    static func makeLiveViewModel(_ updates: [[LiveLocationSummary]]) -> LocationMapScreenViewModel {
-        LocationMapScreenViewModel(mode: .live(userID: "@bob:x"),
+    static func makeLiveViewModel(_ updates: [[LiveLocationSummary]], initial: GeoURI?) -> LocationMapScreenViewModel {
+        LocationMapScreenViewModel(mode: .live(userID: "@bob:x", initial: initial),
                                    liveLocationsPublisher: updates.publisher.eraseToAnyPublisher(),
                                    openInMaps: { _, _ in })
     }

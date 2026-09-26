@@ -59,15 +59,18 @@ struct LocationBubble: View {
             }
         }
         .task(id: snapshotKey) {
-            guard let drawnGeoURI, let mapSnapshotLoader else {
+            guard let mapSnapshotLoader, geoURI != nil else {
                 snapshotFailed = true
                 return
             }
+            // This can run before `onChange` sets the first drawn position; that change re-runs it.
+            guard let drawnGeoURI else { return }
+
             // The previous image stays up while a live share's next one loads.
             if let image = await mapSnapshotLoader.snapshot(of: drawnGeoURI, size: Self.snapshotSize) {
                 snapshot = image
                 snapshotFailed = false
-            } else if snapshot == nil {
+            } else if snapshot == nil, !Task.isCancelled {
                 snapshotFailed = true
             }
         }
