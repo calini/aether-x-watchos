@@ -52,11 +52,14 @@ final class LocationProvider: NSObject, LocationProviderProtocol {
         let timeout: Duration
         /// Only started once authorized, so the first-use permission prompt doesn't eat into the timeout.
         var timeoutTask: Task<Void, Never>?
+        /// Starts straight away so a prompt that is never answered (or never shown) can't leave the request stuck.
+        var upperBoundTask: Task<Void, Never>?
     }
 
     /// How old `CLLocationManager.location` may be to answer a one-shot request during a live share.
     static let maximumCachedFixAge: TimeInterval = 60
 
+    private let upperBound: Duration
     private let manager = CLLocationManager()
     private let authorizationSubject: CurrentValueSubject<LocationAuthorization, Never>
     private let updatesSubject = PassthroughSubject<GeoURI, Never>()
@@ -68,7 +71,9 @@ final class LocationProvider: NSObject, LocationProviderProtocol {
     var authorizationPublisher: AnyPublisher<LocationAuthorization, Never> { authorizationSubject.eraseToAnyPublisher() }
     var updatesPublisher: AnyPublisher<GeoURI, Never> { updatesSubject.eraseToAnyPublisher() }
 
-    override init() {
+    /// - Parameter upperBound: The longest any request can take, including waiting for the permission prompt.
+    init(upperBound: Duration = .seconds(120)) {
+        self.upperBound = upperBound
         authorizationSubject = .init(LocationAuthorization(manager.authorizationStatus))
         super.init()
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
@@ -91,7 +96,7 @@ final class LocationProvider: NSObject, LocationProviderProtocol {
 
         let id = UUID()
         return await withCheckedContinuation { continuation in
-            pendingFixes[id] = PendingFix(continuation: continuation, timeout: timeout)
+            pendingFixes[id] = PendingFix(continuation: continuation, timeout: timeout, upperBoundTask: expire(id, after: upperBound))
             if authorization == .authorized {
                 startTimeout(for: id)
                 // During a live share the next update settles the request instead.
@@ -134,9 +139,13 @@ final class LocationProvider: NSObject, LocationProviderProtocol {
 
     private func startTimeout(for id: UUID) {
         guard let timeout = pendingFixes[id]?.timeout, pendingFixes[id]?.timeoutTask == nil else { return }
+        pendingFixes[id]?.timeoutTask = expire(id, after: timeout)
+    }
+
+    private func expire(_ id: UUID, after duration: Duration) -> Task<Void, Never> {
         // Strongly captures self so a pending request can't outlive the provider unresolved.
-        pendingFixes[id]?.timeoutTask = Task {
-            try? await Task.sleep(for: timeout)
+        Task {
+            try? await Task.sleep(for: duration)
             guard !Task.isCancelled else { return }
             MXLog.info("Location request timed out")
             self.finishFix(id, with: .failure(.timedOut))
@@ -146,6 +155,7 @@ final class LocationProvider: NSObject, LocationProviderProtocol {
     private func finishFix(_ id: UUID, with result: Result<GeoURI, LocationError>) {
         guard let pending = pendingFixes.removeValue(forKey: id) else { return }
         pending.timeoutTask?.cancel()
+        pending.upperBoundTask?.cancel()
         pending.continuation.resume(returning: result)
     }
 

@@ -20,6 +20,17 @@ struct LocationProviderTests {
     }
 
     @Test
+    func undeterminedAuthorizationTimesOutAtTheUpperBound() async throws {
+        let provider = LocationProvider(upperBound: .milliseconds(100))
+        // A fresh simulator hasn't been asked yet, and nobody answers the prompt during the test.
+        try #require(provider.authorization == .notDetermined)
+
+        let result = await provider.currentLocation(timeout: .seconds(30))
+
+        #expect(result == .failure(.timedOut))
+    }
+
+    @Test
     func recentFixUsesAValidRecentLocation() throws {
         let now = Date.now
         let fix = try #require(LocationProvider.recentFix(location(accuracy: 12, age: 30, now: now), now: now))
