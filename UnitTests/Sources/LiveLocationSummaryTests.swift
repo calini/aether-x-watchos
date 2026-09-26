@@ -16,10 +16,26 @@ struct LiveLocationSummaryTests {
         let summary = LiveLocationSummaries.summary(from: share("@a:x", lat: 51.5, startTs: 1_700_000_000_000, locationTs: 1_700_000_010_000))
 
         #expect(summary == LiveLocationSummary(userID: "@a:x",
+                                               beaconID: "$beacon-@a:x",
                                                startDate: Date(timeIntervalSince1970: 1_700_000_000),
+                                               endDate: Date(timeIntervalSince1970: 1_700_000_900),
                                                lastGeoURI: GeoURI(latitude: 51.5, longitude: -0.12, uncertainty: nil),
                                                lastUpdate: Date(timeIntervalSince1970: 1_700_000_010)))
         #expect(summary.id == "@a:x")
+    }
+
+    @Test
+    func mapsTheEndDateFromTheStartAndTimeout() {
+        let share = LiveLocationShare(lastLocation: nil, userId: "@a:x", startTs: 1_700_000_000_500, timeout: 3_600_000, beaconId: "$beacon")
+
+        #expect(LiveLocationSummaries.summary(from: share).endDate == Date(timeIntervalSince1970: 1_700_003_600.5))
+    }
+
+    @Test
+    func saturatesAnOverflowingTimeout() {
+        let share = LiveLocationShare(lastLocation: nil, userId: "@a:x", startTs: 1_700_000_000_000, timeout: .max, beaconId: "$beacon")
+
+        #expect(LiveLocationSummaries.summary(from: share).endDate == Date(timeIntervalSince1970: TimeInterval(UInt64.max) / 1000))
     }
 
     @Test

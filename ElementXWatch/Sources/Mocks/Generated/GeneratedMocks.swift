@@ -601,6 +601,95 @@ nonisolated class KeychainStoreMock: KeychainStoreProtocol, @unchecked Sendable 
         removeRestorationTokenClosure?()
     }
 }
+nonisolated class LiveLocationServiceMock: LiveLocationServiceProtocol, @unchecked Sendable {
+    var state: LiveLocationState {
+        get { return underlyingState }
+        set(value) { underlyingState = value }
+    }
+    nonisolated(unsafe) var underlyingState: LiveLocationState!
+    var statePublisher: AnyPublisher<LiveLocationState, Never> {
+        get { return underlyingStatePublisher }
+        set(value) { underlyingStatePublisher = value }
+    }
+    nonisolated(unsafe) var underlyingStatePublisher: AnyPublisher<LiveLocationState, Never>!
+
+    //MARK: - restore
+
+    private let restoreCallsCountLock = NSLock()
+    private nonisolated(unsafe) var restoreUnderlyingCallsCount = 0
+    var restoreCallsCount: Int {
+        get { restoreCallsCountLock.withLock { restoreUnderlyingCallsCount } }
+        set { restoreCallsCountLock.withLock { restoreUnderlyingCallsCount = newValue } }
+    }
+    var restoreCalled: Bool {
+        return restoreCallsCount > 0
+    }
+    nonisolated(unsafe) var restoreClosure: (() async -> Void)?
+
+    @concurrent func restore() async {
+        restoreCallsCountLock.withLock { restoreUnderlyingCallsCount += 1 }
+        await restoreClosure?()
+    }
+    //MARK: - start
+
+    private let startRoomIDDurationCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startRoomIDDurationUnderlyingCallsCount = 0
+    var startRoomIDDurationCallsCount: Int {
+        get { startRoomIDDurationCallsCountLock.withLock { startRoomIDDurationUnderlyingCallsCount } }
+        set { startRoomIDDurationCallsCountLock.withLock { startRoomIDDurationUnderlyingCallsCount = newValue } }
+    }
+    var startRoomIDDurationCalled: Bool {
+        return startRoomIDDurationCallsCount > 0
+    }
+    private let startRoomIDDurationReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var startRoomIDDurationUnderlyingReceivedArguments: (roomID: String, duration: Duration)?
+    var startRoomIDDurationReceivedArguments: (roomID: String, duration: Duration)? {
+        get { startRoomIDDurationReceivedArgumentsLock.withLock { startRoomIDDurationUnderlyingReceivedArguments } }
+        set { startRoomIDDurationReceivedArgumentsLock.withLock { startRoomIDDurationUnderlyingReceivedArguments = newValue } }
+    }
+    private let startRoomIDDurationReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var startRoomIDDurationUnderlyingReceivedInvocations: [(roomID: String, duration: Duration)] = []
+    var startRoomIDDurationReceivedInvocations: [(roomID: String, duration: Duration)] {
+        get { startRoomIDDurationReceivedInvocationsLock.withLock { startRoomIDDurationUnderlyingReceivedInvocations } }
+        set { startRoomIDDurationReceivedInvocationsLock.withLock { startRoomIDDurationUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let startRoomIDDurationReturnValueLock = NSLock()
+    private nonisolated(unsafe) var startRoomIDDurationUnderlyingReturnValue: Result<Void, LiveLocationServiceError>!
+    var startRoomIDDurationReturnValue: Result<Void, LiveLocationServiceError>! {
+        get { startRoomIDDurationReturnValueLock.withLock { startRoomIDDurationUnderlyingReturnValue } }
+        set { startRoomIDDurationReturnValueLock.withLock { startRoomIDDurationUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var startRoomIDDurationClosure: ((String, Duration) async -> Result<Void, LiveLocationServiceError>)?
+
+    @concurrent func start(roomID: String, duration: Duration) async -> Result<Void, LiveLocationServiceError> {
+        startRoomIDDurationCallsCountLock.withLock { startRoomIDDurationUnderlyingCallsCount += 1 }
+        startRoomIDDurationReceivedArguments = (roomID: roomID, duration: duration)
+        startRoomIDDurationReceivedInvocationsLock.withLock { startRoomIDDurationUnderlyingReceivedInvocations.append((roomID: roomID, duration: duration)) }
+        if let startRoomIDDurationClosure = startRoomIDDurationClosure {
+            return await startRoomIDDurationClosure(roomID, duration)
+        } else {
+            return startRoomIDDurationReturnValue
+        }
+    }
+    //MARK: - stop
+
+    private let stopCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopUnderlyingCallsCount = 0
+    var stopCallsCount: Int {
+        get { stopCallsCountLock.withLock { stopUnderlyingCallsCount } }
+        set { stopCallsCountLock.withLock { stopUnderlyingCallsCount = newValue } }
+    }
+    var stopCalled: Bool {
+        return stopCallsCount > 0
+    }
+    nonisolated(unsafe) var stopClosure: (() async -> Void)?
+
+    @concurrent func stop() async {
+        stopCallsCountLock.withLock { stopUnderlyingCallsCount += 1 }
+        await stopClosure?()
+    }
+}
 nonisolated class LocationProviderMock: LocationProviderProtocol, @unchecked Sendable {
     var authorization: LocationAuthorization {
         get { return underlyingAuthorization }
