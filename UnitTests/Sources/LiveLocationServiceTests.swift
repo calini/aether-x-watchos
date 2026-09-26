@@ -205,8 +205,21 @@ struct LiveLocationServiceTests {
     func doesNotResumeAShareThatIsGone() async throws {
         let harness = Harness()
         harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
-        // Our share was replaced by one started on another device.
+        // Our share was replaced by one started on another device, which stopping would end.
         harness.liveLocations("!a").send([.own(beaconID: "$newer", endDate: harness.date(900))])
+
+        await harness.service.restore()
+
+        #expect(harness.service.state == .idle)
+        #expect(harness.store.record == nil)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 0)
+        #expect(harness.locationProvider.startUpdatesCalled == false)
+    }
+
+    @Test
+    func stopsTheSavedShareWhenTheRoomsSharesDontLoadInTime() async throws {
+        let harness = Harness()
+        harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
 
         let restoring = Task { await harness.service.restore() }
         try await waitUntil { harness.clock.sleeperCount == 1 }
@@ -215,8 +228,65 @@ struct LiveLocationServiceTests {
 
         #expect(harness.service.state == .idle)
         #expect(harness.store.record == nil)
-        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 0)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
         #expect(harness.locationProvider.startUpdatesCalled == false)
+    }
+
+    @Test
+    func keepsTheSavedShareUntilTheRoomIsAvailable() async {
+        let harness = Harness()
+        let record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
+        harness.store.record = record
+        harness.unavailableRoomIDs = ["!a"]
+
+        await harness.service.restore()
+
+        #expect(harness.service.state == .idle)
+        #expect(harness.store.record == record)
+
+        harness.unavailableRoomIDs = []
+        harness.liveLocations("!a").send([.own(beaconID: "$beacon-!a", endDate: harness.date(600))])
+        await harness.service.restore()
+
+        #expect(harness.service.state == .sharing(roomID: "!a", endsAt: harness.date(600), isPaused: false))
+    }
+
+    @Test
+    func stopsTheSavedShareWithoutLocationAccess() async {
+        let harness = Harness()
+        harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
+        harness.liveLocations("!a").send([.own(beaconID: "$beacon-!a", endDate: harness.date(600))])
+        harness.locationProvider.authorization = .denied
+
+        await harness.service.restore()
+
+        #expect(harness.service.state == .idle)
+        #expect(harness.store.record == nil)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
+        #expect(harness.locationProvider.startUpdatesCalled == false)
+    }
+
+    @Test
+    func startingDuringARestoreStopsTheRestoredShare() async throws {
+        let harness = Harness()
+        harness.store.record = LiveLocationShareRecord(roomID: "!a", eventID: "$beacon-!a", endsAt: harness.date(600))
+
+        // The room's shares haven't loaded yet, so the restore is waiting.
+        let restoring = Task { await harness.service.restore() }
+        try await waitUntil { harness.clock.sleeperCount == 1 }
+        let starting = Task { await harness.service.start(roomID: "!b", duration: .seconds(900)) }
+        await settle()
+        #expect(harness.room("!b").startLiveLocationShareDurationCalled == false)
+
+        harness.liveLocations("!a").send([.own(beaconID: "$beacon-!a", endDate: harness.date(600))])
+        await restoring.value
+        let result = await starting.value
+
+        #expect(result.failure == nil)
+        #expect(harness.room("!a").stopLiveLocationShareCallsCount == 1)
+        #expect(harness.room("!b").startLiveLocationShareDurationCallsCount == 1)
+        #expect(harness.service.state == .sharing(roomID: "!b", endsAt: harness.date(900), isPaused: false))
+        #expect(harness.store.record?.roomID == "!b")
     }
 
     @Test
@@ -252,7 +322,8 @@ struct LiveLocationServiceTests {
         #expect(result.failure == .startFailed)
         #expect(harness.service.state == .idle)
         #expect(harness.store.record == nil)
-        #expect(harness.locationProvider.stopUpdatesCallsCount == harness.locationProvider.startUpdatesCallsCount)
+        #expect(harness.locationProvider.startUpdatesCallsCount == 1)
+        #expect(harness.locationProvider.stopUpdatesCallsCount == 1)
     }
 
     @Test
@@ -263,7 +334,8 @@ struct LiveLocationServiceTests {
 
         #expect(result.failure == .startFailed)
         #expect(harness.service.state == .idle)
-        #expect(harness.locationProvider.stopUpdatesCallsCount == harness.locationProvider.startUpdatesCallsCount)
+        #expect(harness.locationProvider.startUpdatesCallsCount == 1)
+        #expect(harness.locationProvider.stopUpdatesCallsCount == 1)
     }
 
     @Test
@@ -325,6 +397,7 @@ private final class Harness {
     let updates = PassthroughSubject<GeoURI, Never>()
     let ownBeaconInfo = PassthroughSubject<OwnBeaconInfo, Never>()
     let store = InMemoryLiveLocationShareStore()
+    var unavailableRoomIDs: Set<String> = []
     private(set) var requestedRoomIDs: [String] = []
     private var rooms: [String: RoomLocationProxyMock] = [:]
     private var liveLocationSubjects: [String: CurrentValueSubject<[LiveLocationSummary], Never>] = [:]
@@ -350,7 +423,7 @@ private final class Harness {
                                       locationProvider: locationProvider,
                                       roomProvider: { [unowned self] roomID in
                                           requestedRoomIDs.append(roomID)
-                                          return rooms[roomID]
+                                          return unavailableRoomIDs.contains(roomID) ? nil : rooms[roomID]
                                       },
                                       ownBeaconInfoPublisher: ownBeaconInfo.eraseToAnyPublisher(),
                                       store: store,

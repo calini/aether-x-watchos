@@ -22,7 +22,8 @@ enum LiveLocationServiceError: Error, Equatable {
 protocol LiveLocationServiceProtocol: AnyObject {
     var state: LiveLocationState { get }
     var statePublisher: AnyPublisher<LiveLocationState, Never> { get }
-    /// Resumes a share this device started before a relaunch, if it is still live. Call once per session.
+    /// Resumes a share this device started before a relaunch, if it is still live, otherwise ends it.
+    /// Idempotent: safe to call again, e.g. once the room list has loaded if the room wasn't available yet.
     func restore() async
     /// Stops any share in another room first (callers confirm with the user before calling).
     func start(roomID: String, duration: Duration) async -> Result<Void, LiveLocationServiceError>
@@ -106,6 +107,8 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     private let stateSubject = CurrentValueSubject<LiveLocationState, Never>(.idle)
     private var activeShare: ActiveShare?
     private var isStarting = false
+    /// The restore in progress, awaited by `start` and `stop` so a resumed share can't outlive them.
+    private var restoreTask: Task<Void, Never>?
     /// Non-nil while Core Location updates run for us.
     private var updatesCancellable: AnyCancellable?
     private var latestFix: GeoURI?
@@ -141,26 +144,14 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     }
 
     func restore() async {
-        guard activeShare == nil, let record = store.load() else { return }
-        guard record.endsAt > now() else {
-            MXLog.info("The saved live location share has expired, not resuming")
-            store.clear()
+        if let restoreTask {
+            await restoreTask.value
             return
         }
-
-        let roomProxy = await roomProvider(record.roomID)
-        let isLive = if let roomProxy { await isOwnShareLive(record, in: roomProxy) } else { false }
-        // A share started meanwhile replaces the saved one.
-        guard activeShare == nil, !isStarting, store.load() == record else { return }
-        guard let roomProxy, isLive else {
-            MXLog.info("The saved live location share is no longer live, not resuming")
-            store.clear()
-            return
-        }
-
-        MXLog.info("Resuming the live location share in \(record.roomID)")
-        startReceivingUpdates()
-        begin(ActiveShare(roomID: record.roomID, roomProxy: roomProxy, eventID: record.eventID, endsAt: record.endsAt))
+        let task = Task { await performRestore() }
+        restoreTask = task
+        await task.value
+        restoreTask = nil
     }
 
     func start(roomID: String, duration: Duration) async -> Result<Void, LiveLocationServiceError> {
@@ -175,6 +166,7 @@ final class LiveLocationService: LiveLocationServiceProtocol {
             MXLog.info("Can't start a live location share without location access")
             return .failure(.noLocationAccess)
         }
+        await restoreTask?.value
         await stop()
 
         // Started first so Core Location warms up while the share is created.
@@ -201,6 +193,7 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     }
 
     func stop() async {
+        await restoreTask?.value
         guard let share = activeShare else { return }
         endLocally(share)
         MXLog.info("Stopping the live location share in \(share.roomID)")
@@ -212,6 +205,49 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     }
 
     // MARK: - Private
+
+    private func performRestore() async {
+        guard activeShare == nil, let record = store.load() else { return }
+        guard record.endsAt > now() else {
+            MXLog.info("The saved live location share has expired, not resuming")
+            store.clear()
+            return
+        }
+        guard let roomProxy = await roomProvider(record.roomID) else {
+            MXLog.info("Room \(record.roomID) isn't available yet, keeping the saved live location share")
+            return
+        }
+        guard locationProvider.authorization == .authorized else {
+            MXLog.info("No location access, stopping the saved live location share")
+            await abandon(record, in: roomProxy)
+            return
+        }
+
+        let status = await savedShareStatus(record, in: roomProxy)
+        guard activeShare == nil, store.load() == record else { return }
+
+        switch status {
+        case .live:
+            MXLog.info("Resuming the live location share in \(record.roomID)")
+            startReceivingUpdates()
+            begin(ActiveShare(roomID: record.roomID, roomProxy: roomProxy, eventID: record.eventID, endsAt: record.endsAt))
+        case .ended, .replaced:
+            MXLog.info("The saved live location share is no longer ours to resume")
+            store.clear()
+        case .unknown:
+            // Otherwise it would stay live on the server, with a stale location and nothing to stop it.
+            MXLog.info("The room's live shares didn't load in time, stopping the saved live location share")
+            await abandon(record, in: roomProxy)
+        }
+    }
+
+    /// Best effort: if the stop fails, the share still expires on its own.
+    private func abandon(_ record: LiveLocationShareRecord, in roomProxy: RoomLocationProxyProtocol) async {
+        store.clear()
+        if case .failure = await roomProxy.stopLiveLocationShare() {
+            MXLog.error("Stopping the saved live location share in \(record.roomID) failed")
+        }
+    }
 
     private func begin(_ share: ActiveShare) {
         activeShare = share
@@ -330,21 +366,24 @@ final class LiveLocationService: LiveLocationServiceProtocol {
         }
     }
 
-    /// Waits for the room's live shares to include ours, still live, or gives up after `restoreTimeout`.
-    private func isOwnShareLive(_ record: LiveLocationShareRecord, in roomProxy: RoomLocationProxyProtocol) async -> Bool {
+    /// Waits for the room's live shares to include one of ours, or gives up after `restoreTimeout`.
+    private func savedShareStatus(_ record: LiveLocationShareRecord, in roomProxy: RoomLocationProxyProtocol) async -> SavedShareStatus {
         let ownUserID = ownUserID, now = now
         let sleep = makeSleep(Self.restoreTimeout)
         return await withCheckedContinuation { continuation in
             let lookup = OneShotLookup(continuation)
             // The initial snapshot is only sent when non-empty, and arrives after a hop to the main actor.
             lookup.attach(roomProxy.liveLocationsPublisher.sink { summaries in
-                if summaries.contains(where: { $0.userID == ownUserID && $0.beaconID == record.eventID && $0.endDate > now() }) {
-                    lookup.finish(true)
+                let ownShares = summaries.filter { $0.userID == ownUserID }
+                if let saved = ownShares.first(where: { $0.beaconID == record.eventID }) {
+                    lookup.finish(saved.endDate > now() ? .live : .ended)
+                } else if !ownShares.isEmpty {
+                    lookup.finish(.replaced)
                 }
             })
             lookup.attach(Task {
                 try? await sleep()
-                lookup.finish(false)
+                lookup.finish(.unknown)
             })
         }
     }
@@ -372,13 +411,23 @@ final class LiveLocationService: LiveLocationServiceProtocol {
     }
 }
 
+/// What the room's live shares say about the share saved before a relaunch.
+private enum SavedShareStatus {
+    case live
+    case ended
+    /// We share from another device now; stopping would end that share.
+    case replaced
+    /// The room's shares didn't load in time.
+    case unknown
+}
+
 /// Resolves a continuation once, then drops its subscription and timeout.
 private final class OneShotLookup {
-    private var continuation: CheckedContinuation<Bool, Never>?
+    private var continuation: CheckedContinuation<SavedShareStatus, Never>?
     private var cancellable: AnyCancellable?
     private var timeoutTask: Task<Void, Never>?
 
-    init(_ continuation: CheckedContinuation<Bool, Never>) {
+    init(_ continuation: CheckedContinuation<SavedShareStatus, Never>) {
         self.continuation = continuation
     }
 
@@ -398,13 +447,13 @@ private final class OneShotLookup {
         }
     }
 
-    func finish(_ isLive: Bool) {
+    func finish(_ status: SavedShareStatus) {
         guard let continuation else { return }
         self.continuation = nil
         cancellable?.cancel()
         cancellable = nil
         timeoutTask?.cancel()
         timeoutTask = nil
-        continuation.resume(returning: isLive)
+        continuation.resume(returning: status)
     }
 }

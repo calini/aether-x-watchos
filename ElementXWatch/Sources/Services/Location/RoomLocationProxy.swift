@@ -62,7 +62,7 @@ final class RoomLocationProxy: RoomLocationProxyProtocol {
             MXLog.info("Started a live location share: \(eventID)")
             return .success(eventID)
         } catch {
-            MXLog.error("Starting a live location share failed: \(error)")
+            MXLog.error("Starting a live location share failed: \(type(of: error))")
             return .failure(.sdkError(error.localizedDescription))
         }
     }
@@ -84,7 +84,7 @@ final class RoomLocationProxy: RoomLocationProxyProtocol {
             MXLog.info("Stopped the live location share")
             return .success(())
         } catch {
-            MXLog.error("Stopping a live location share failed: \(error)")
+            MXLog.error("Stopping a live location share failed: \(type(of: error))")
             return .failure(.sdkError(error.localizedDescription))
         }
     }
