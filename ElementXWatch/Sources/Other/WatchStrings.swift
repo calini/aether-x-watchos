@@ -87,6 +87,7 @@ nonisolated enum WatchStrings {
 
     static let reply = "Reply"
     static let replyingTo = "Replying to"
+    static let moreReactions = "More reactions"
     static let sendFailed = "Couldn't send your message."
     static let resendFailed = "Couldn't resend. Try again later."
     static let failedTapToRetry = "Not sent · Tap to retry"

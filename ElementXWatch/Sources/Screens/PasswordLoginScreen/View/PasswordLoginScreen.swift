@@ -27,9 +27,8 @@ struct PasswordLoginScreen: View {
                     ProgressView().frame(maxWidth: .infinity)
                 } else {
                     Button(WatchStrings.signInAction) { context.send(viewAction: .signIn) }
-                        .buttonStyle(.fullWidth)
+                        .buttonStyle(.fullWidthProminent)
                         .disabled(!context.viewState.canSignIn)
-                        .tint(Color.compound.bgAccentRest)
                 }
             }
             .disabled(context.viewState.isLoading)

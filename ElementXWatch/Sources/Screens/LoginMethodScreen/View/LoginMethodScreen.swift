@@ -18,10 +18,11 @@ struct LoginMethodScreen: View {
                     .foregroundStyle(Color.compound.textSecondary)
                 if context.viewState.options.supportsPassword {
                     Button(WatchStrings.signInWithPassword) { context.send(viewAction: .password) }
-                        .tint(Color.compound.bgAccentRest)
+                        .buttonStyle(.fullWidthProminent)
                 }
                 if context.viewState.options.supportsQRCode {
                     Button(WatchStrings.signInWithIPhone) { context.send(viewAction: .qrCode) }
+                        .buttonStyle(.fullWidthProminent)
                 }
                 if !context.viewState.options.supportsAnyMethod {
                     Text(WatchStrings.noSignInMethods).multilineTextAlignment(.center)

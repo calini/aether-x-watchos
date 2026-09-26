@@ -97,7 +97,6 @@ struct ChatScreen: View {
                 context.send(viewAction: .send(text))
             }
             .buttonStyle(.fullWidth)
-            .tint(Color.compound.bgAccentRest)
         }
         .padding(.top, 4)
     }

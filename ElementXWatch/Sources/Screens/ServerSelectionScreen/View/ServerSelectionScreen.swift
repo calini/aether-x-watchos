@@ -25,9 +25,8 @@ struct ServerSelectionScreen: View {
                     ProgressView().frame(maxWidth: .infinity)
                 } else {
                     Button(WatchStrings.continueAction) { context.send(viewAction: .continue) }
-                        .buttonStyle(.fullWidth)
+                        .buttonStyle(.fullWidthProminent)
                         .disabled(!context.viewState.canContinue)
-                        .tint(Color.compound.bgAccentRest)
                 }
             }
         }
