@@ -97,7 +97,7 @@ struct SessionVerificationScreen_Previews: PreviewProvider {
     }
 
     static func makeViewModel(_ step: SessionVerificationStep) -> SessionVerificationScreenViewModel {
-        let viewModel = SessionVerificationScreenViewModel(controllerProxy: nil)
+        let viewModel = SessionVerificationScreenViewModel(controllerLoader: { nil })
         viewModel.state.step = step
         return viewModel
     }

@@ -34,8 +34,6 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
     private var cancellables = Set<AnyCancellable>()
     // Lives and dies with the presented verification, so a dismissed screen's late action is ignored.
     private var verificationCancellable: AnyCancellable?
-    /// Set synchronously while the controller loads; also a test hook.
-    private(set) var isPreparingVerification = false
 
     var actionsPublisher: AnyPublisher<UserSessionFlowCoordinatorAction, Never> {
         actionsSubject.eraseToAnyPublisher()
@@ -86,23 +84,18 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
             }))
     }
 
-    /// Fetches the controller first, so repeated requests while it loads are ignored.
+    /// The controller is fetched when the user taps Start: right after a password sign-in it isn't
+    /// available yet, as the own identity only arrives with the first keys query.
     func presentVerification() {
-        guard navigation.verification == nil, !isPreparingVerification else { return }
-        isPreparingVerification = true
-        Task { [weak self, clientProxy] in
-            let controllerProxy = await clientProxy.sessionVerificationController()
-            guard let self else { return }
-            isPreparingVerification = false
-            let coordinator = SessionVerificationScreenCoordinator(controllerProxy: controllerProxy)
-            verificationCancellable = coordinator.actionsPublisher
-                .sink { [weak self] action in
-                    switch action {
-                    case .dismiss: self?.dismissVerification()
-                    }
+        guard navigation.verification == nil else { return }
+        let coordinator = SessionVerificationScreenCoordinator { [clientProxy] in await clientProxy.sessionVerificationController() }
+        verificationCancellable = coordinator.actionsPublisher
+            .sink { [weak self] action in
+                switch action {
+                case .dismiss: self?.dismissVerification()
                 }
-            navigation.verification = coordinator
-        }
+            }
+        navigation.verification = coordinator
     }
 
     /// A swipe-down can happen mid-flow, so an in-progress verification is cancelled rather than left running.

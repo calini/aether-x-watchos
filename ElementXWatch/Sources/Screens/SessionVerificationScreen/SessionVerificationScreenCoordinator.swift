@@ -20,8 +20,8 @@ final class SessionVerificationScreenCoordinator: CoordinatorProtocol {
         viewModel.context
     }
 
-    init(controllerProxy: SessionVerificationControllerProxyProtocol?) {
-        viewModel = SessionVerificationScreenViewModel(controllerProxy: controllerProxy)
+    init(controllerLoader: @escaping () async -> SessionVerificationControllerProxyProtocol?) {
+        viewModel = SessionVerificationScreenViewModel(controllerLoader: controllerLoader)
     }
 
     func toPresentable() -> AnyView {

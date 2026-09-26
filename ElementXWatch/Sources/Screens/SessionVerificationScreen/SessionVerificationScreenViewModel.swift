@@ -10,30 +10,39 @@ import Combine
 typealias SessionVerificationScreenViewModelType = StateStoreViewModelV2<SessionVerificationScreenViewState, SessionVerificationScreenViewAction>
 
 final class SessionVerificationScreenViewModel: SessionVerificationScreenViewModelType, SessionVerificationScreenViewModelProtocol {
-    private let controllerProxy: SessionVerificationControllerProxyProtocol?
+    private let controllerLoader: () async -> SessionVerificationControllerProxyProtocol?
+    private let retryInterval: Duration
+    private let timeout: Duration
     private let actionsSubject = PassthroughSubject<SessionVerificationScreenViewModelAction, Never>()
+    /// Set once loaded; the SDK controller is cached per client, so it never changes afterwards.
+    private var controllerProxy: SessionVerificationControllerProxyProtocol?
+    private var loadingTask: Task<Void, Never>?
+    private var loadingTimeoutTask: Task<Void, Never>?
 
     var actionsPublisher: AnyPublisher<SessionVerificationScreenViewModelAction, Never> {
         actionsSubject.eraseToAnyPublisher()
     }
 
-    init(controllerProxy: SessionVerificationControllerProxyProtocol?) {
-        self.controllerProxy = controllerProxy
+    /// - Parameters:
+    ///   - controllerLoader: Returns `nil` while the controller is unavailable, e.g. before the own
+    ///     identity has been downloaded right after sign-in. Retried every `retryInterval`, up to `timeout`.
+    init(controllerLoader: @escaping () async -> SessionVerificationControllerProxyProtocol?,
+         retryInterval: Duration = .seconds(3),
+         timeout: Duration = .seconds(30)) {
+        self.controllerLoader = controllerLoader
+        self.retryInterval = retryInterval
+        self.timeout = timeout
         super.init(initialViewState: SessionVerificationScreenViewState())
-
-        controllerProxy?.actionsPublisher
-            .sink { [weak self] action in self?.handle(action) }
-            .store(in: &cancellables)
     }
 
     override func process(viewAction: SessionVerificationScreenViewAction) {
         switch viewAction {
         case .start, .tryAgain:
-            guard let controllerProxy else {
-                state.step = .failed
-                return
+            if let controllerProxy {
+                perform(setting: .waitingForAcceptance) { await controllerProxy.requestDeviceVerification() }
+            } else {
+                loadControllerThenRequestVerification()
             }
-            perform(setting: .waitingForAcceptance) { await controllerProxy.requestDeviceVerification() }
         case .match:
             guard let controllerProxy else { return }
             perform(setting: .confirming) { await controllerProxy.approveVerification() }
@@ -41,11 +50,65 @@ final class SessionVerificationScreenViewModel: SessionVerificationScreenViewMod
             guard let controllerProxy else { return }
             perform(setting: .declined) { await controllerProxy.declineVerification() }
         case .cancel:
+            if loadingTask != nil {
+                stopLoadingController()
+                state.step = .cancelled
+                return
+            }
             guard let controllerProxy else { return }
             perform(setting: .cancelled) { await controllerProxy.cancelVerification() }
         case .dismiss:
+            stopLoadingController()
             actionsSubject.send(.dismiss)
         }
+    }
+
+    /// Shows the waiting step while retrying, so a controller that turns up within `timeout` is used
+    /// straight away. Only the first miss is logged, the client proxy logs the underlying error.
+    private func loadControllerThenRequestVerification() {
+        stopLoadingController()
+        state.step = .waitingForAcceptance
+
+        loadingTask = Task { [weak self, controllerLoader, retryInterval] in
+            var hasMissed = false
+            while !Task.isCancelled {
+                if let controllerProxy = await controllerLoader() {
+                    guard !Task.isCancelled else { return }
+                    self?.didLoadController(controllerProxy, afterRetrying: hasMissed)
+                    return
+                }
+                if !hasMissed {
+                    MXLog.info("Session verification controller unavailable, retrying")
+                    hasMissed = true
+                }
+                guard (try? await Task.sleep(for: retryInterval)) != nil, self != nil else { return }
+            }
+        }
+        loadingTimeoutTask = Task { [weak self, timeout] in
+            guard (try? await Task.sleep(for: timeout)) != nil, let self else { return }
+            MXLog.error("Session verification controller still unavailable after \(timeout)")
+            stopLoadingController()
+            state.step = .failed
+        }
+    }
+
+    private func didLoadController(_ controllerProxy: SessionVerificationControllerProxyProtocol, afterRetrying: Bool) {
+        stopLoadingController()
+        if afterRetrying {
+            MXLog.info("Session verification controller became available")
+        }
+        self.controllerProxy = controllerProxy
+        controllerProxy.actionsPublisher
+            .sink { [weak self] action in self?.handle(action) }
+            .store(in: &cancellables)
+        perform(setting: .waitingForAcceptance) { await controllerProxy.requestDeviceVerification() }
+    }
+
+    private func stopLoadingController() {
+        loadingTask?.cancel()
+        loadingTask = nil
+        loadingTimeoutTask?.cancel()
+        loadingTimeoutTask = nil
     }
 
     /// Gated on the expected step: the controller proxy is cached per client and shared across attempts

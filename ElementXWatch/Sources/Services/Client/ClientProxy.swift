@@ -30,7 +30,8 @@ final class ClientProxy: ClientProxyProtocol {
     /// `deinit` would then clear the second's delegate too.
     private var sessionVerificationControllerProxy: SessionVerificationControllerProxyProtocol?
     /// Serialises concurrent first calls onto the same fetch, so they can't each build a competing proxy.
-    private var sessionVerificationControllerTask: Task<SessionVerificationControllerProxyProtocol?, Never>?
+    private var sessionVerificationControllerTask: Task<Result<SessionVerificationControllerProxyProtocol, Error>, Never>?
+    private var hasLoggedSessionVerificationControllerFailure = false
 
     let userID: String
     let deviceID: String?
@@ -138,20 +139,38 @@ final class ClientProxy: ClientProxyProtocol {
             return sessionVerificationControllerProxy
         }
 
-        let task = sessionVerificationControllerTask ?? Task { [client] in
+        let task = sessionVerificationControllerTask ?? Task { [client, userID] () -> Result<SessionVerificationControllerProxyProtocol, Error> in
             do {
-                return try await SessionVerificationControllerProxy(controller: client.getSessionVerificationController()) as SessionVerificationControllerProxyProtocol?
+                return try await .success(SessionVerificationControllerProxy(controller: client.getSessionVerificationController()))
             } catch {
-                MXLog.error("Failed to get the session verification controller: \(error)")
-                return nil
+                // The controller needs the own identity, which is only in the store once a keys query has run
+                // (e.g. not yet right after a fresh sign-in), so ask the server for it and try once more.
+                guard (try? await client.encryption().userIdentity(userId: userID, fallbackToServer: true)) != nil else {
+                    return .failure(error)
+                }
+                do {
+                    return try await .success(SessionVerificationControllerProxy(controller: client.getSessionVerificationController()))
+                } catch {
+                    return .failure(error)
+                }
             }
         }
         sessionVerificationControllerTask = task
-
-        let proxy = await task.value
-        sessionVerificationControllerProxy = proxy
+        let result = await task.value
         sessionVerificationControllerTask = nil
-        return proxy
+
+        switch result {
+        case .success(let proxy):
+            sessionVerificationControllerProxy = proxy
+            return proxy
+        case .failure(let error):
+            // Callers retry while the identity downloads, so only the first failure is logged.
+            if !hasLoggedSessionVerificationControllerFailure {
+                MXLog.error("Failed to get the session verification controller: \(error)")
+                hasLoggedSessionVerificationControllerFailure = true
+            }
+            return nil
+        }
     }
 
     /// Any send error disables that room's send queue until it's re-enabled (mirrors iOS): on every

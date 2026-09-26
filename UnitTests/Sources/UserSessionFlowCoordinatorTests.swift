@@ -29,7 +29,6 @@ struct UserSessionFlowCoordinatorTests {
 
         coordinator.start()
 
-        #expect(!coordinator.isPreparingVerification)
         #expect(!coordinator.isPresentingVerification)
     }
 
@@ -48,22 +47,51 @@ struct UserSessionFlowCoordinatorTests {
     }
 
     @Test
-    func presentingTwiceWhilePreparingPresentsOnce() async throws {
+    func presentingTwicePresentsOnce() async throws {
         let setup = Setup()
-        let gate = AsyncGate()
-        let controllerProxy = SessionVerificationControllerProxyMock.idle
-        setup.clientProxy.sessionVerificationControllerClosure = {
-            await gate.wait()
-            return controllerProxy
-        }
         let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, showsVerificationOnStart: true)
-
         coordinator.start()
-        coordinator.presentVerification()
-        await gate.open()
-
         try await waitUntil { coordinator.isPresentingVerification }
-        #expect(setup.clientProxy.sessionVerificationControllerCallsCount == 1)
+        let context = coordinator.verificationScreen
+
+        coordinator.presentVerification()
+
+        #expect(coordinator.verificationScreen === context)
+    }
+
+    /// Right after a password sign-in the controller isn't available yet (the own identity hasn't been
+    /// downloaded), so it is only fetched once the user taps Start.
+    @Test
+    func startFetchesTheControllerWhenTapped() async throws {
+        let setup = Setup()
+        let controllerProxy = SessionVerificationControllerProxyMock.idle
+        setup.clientProxy.sessionVerificationControllerReturnValue = nil
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, showsVerificationOnStart: true)
+        coordinator.start()
+        try await waitUntil { coordinator.isPresentingVerification }
+        #expect(setup.clientProxy.sessionVerificationControllerCallsCount == 0)
+
+        setup.clientProxy.sessionVerificationControllerReturnValue = controllerProxy
+        coordinator.verificationScreen?.send(viewAction: .start)
+
+        try await waitUntil { controllerProxy.requestDeviceVerificationCallsCount == 1 }
+    }
+
+    @Test
+    func swipingAwayWhileWaitingForTheControllerCancels() async throws {
+        let setup = Setup()
+        setup.clientProxy.sessionVerificationControllerReturnValue = nil
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, showsVerificationOnStart: true)
+        coordinator.start()
+        try await waitUntil { coordinator.isPresentingVerification }
+        let context = coordinator.verificationScreen
+        context?.send(viewAction: .start)
+        try await waitUntil { setup.clientProxy.sessionVerificationControllerCallsCount == 1 }
+
+        coordinator.dismissVerification()
+
+        #expect(!coordinator.isPresentingVerification)
+        #expect(context?.viewState.step == .cancelled)
     }
 
     @Test
@@ -75,6 +103,7 @@ struct UserSessionFlowCoordinatorTests {
         coordinator.start()
         try await waitUntil { coordinator.isPresentingVerification }
         coordinator.verificationScreen?.send(viewAction: .start)
+        try await waitUntil { controllerProxy.requestDeviceVerificationCallsCount == 1 }
 
         coordinator.dismissVerification()
 
