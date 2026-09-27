@@ -53,4 +53,27 @@ struct SettingsScreenViewModelTests {
         try await waitUntil { !viewModel.context.viewState.canVerify }
         cancellable.cancel()
     }
+
+    @Test
+    func checksAudioSupport() async throws {
+        let gate = AsyncGate()
+        let viewModel = SettingsScreenViewModel(clientProxy: Setup().clientProxy) {
+            await gate.wait()
+            return true
+        }
+
+        viewModel.context.send(viewAction: .checkAudioSupport)
+        #expect(viewModel.context.viewState.audioSupport == .checking)
+
+        await gate.open()
+        try await waitUntil { viewModel.context.viewState.audioSupport == .supported }
+    }
+
+    @Test
+    func reportsMissingAudioSupport() async throws {
+        let viewModel = SettingsScreenViewModel(clientProxy: Setup().clientProxy) { false }
+
+        viewModel.context.send(viewAction: .checkAudioSupport)
+        try await waitUntil { viewModel.context.viewState.audioSupport == .unsupported }
+    }
 }

@@ -10,13 +10,16 @@ import Combine
 typealias SettingsScreenViewModelType = StateStoreViewModelV2<SettingsScreenViewState, SettingsScreenViewAction>
 
 final class SettingsScreenViewModel: SettingsScreenViewModelType, SettingsScreenViewModelProtocol {
+    private let audioSelfTest: @Sendable () async -> Bool
     private let actionsSubject = PassthroughSubject<SettingsScreenViewModelAction, Never>()
 
     var actionsPublisher: AnyPublisher<SettingsScreenViewModelAction, Never> {
         actionsSubject.eraseToAnyPublisher()
     }
 
-    init(clientProxy: ClientProxyProtocol) {
+    init(clientProxy: ClientProxyProtocol,
+         audioSelfTest: @escaping @Sendable () async -> Bool = { await Task.detached { OpusCodec.selfTest() }.value }) {
+        self.audioSelfTest = audioSelfTest
         super.init(initialViewState: SettingsScreenViewState(userID: clientProxy.userID))
 
         clientProxy.verificationStatePublisher
@@ -38,6 +41,17 @@ final class SettingsScreenViewModel: SettingsScreenViewModelType, SettingsScreen
         case .confirmSignOut:
             state.bindings.isConfirmingSignOut = false
             actionsSubject.send(.signOut)
+        case .checkAudioSupport:
+            checkAudioSupport()
+        }
+    }
+
+    private func checkAudioSupport() {
+        guard state.audioSupport != .checking else { return }
+        state.audioSupport = .checking
+        Task { [weak self, audioSelfTest] in
+            let isSupported = await audioSelfTest()
+            self?.state.audioSupport = isSupported ? .supported : .unsupported
         }
     }
 }

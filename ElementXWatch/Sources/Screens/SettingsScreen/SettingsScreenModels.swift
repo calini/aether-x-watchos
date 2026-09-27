@@ -14,11 +14,20 @@ struct SettingsScreenViewState: BindableState {
     let userID: String
     var displayName: String?
     var verification: SessionVerification = .unknown
+    var audioSupport: AudioSupport = .unchecked
     var bindings = SettingsScreenBindings()
 
     var canVerify: Bool {
         verification == .unverified
     }
+}
+
+/// Whether watchOS can encode and decode Opus, for the DEBUG device check.
+enum AudioSupport {
+    case unchecked
+    case checking
+    case supported
+    case unsupported
 }
 
 struct SettingsScreenBindings {
@@ -29,4 +38,5 @@ enum SettingsScreenViewAction {
     case verifySession
     case signOut
     case confirmSignOut
+    case checkAudioSupport
 }

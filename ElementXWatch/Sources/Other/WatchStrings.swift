@@ -90,6 +90,10 @@ nonisolated enum WatchStrings {
     static let verified = "Verified session"
     static let unverified = "Unverified session"
     static let verificationUnknown = "Checking verification…"
+    static let checkAudioSupport = "Check audio support"
+    static let checkingAudioSupport = "Checking audio support…"
+    static let opusSupported = "Opus: ✅"
+    static let opusUnsupported = "Opus: ❌"
 
     static let reply = "Reply"
     static let replyingTo = "Replying to"

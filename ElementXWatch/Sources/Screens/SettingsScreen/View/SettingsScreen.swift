@@ -22,6 +22,12 @@ struct SettingsScreen: View {
                     Button(WatchStrings.verifyTitle) { context.send(viewAction: .verifySession) }
                 }
             }
+            #if DEBUG
+            Section {
+                Button(audioSupportText) { context.send(viewAction: .checkAudioSupport) }
+                    .disabled(context.viewState.audioSupport == .checking)
+            }
+            #endif
             Section {
                 Button(WatchStrings.signOut, role: .destructive) { context.send(viewAction: .signOut) }
             }
@@ -38,6 +44,15 @@ struct SettingsScreen: View {
         case .verified: WatchStrings.verified
         case .unverified: WatchStrings.unverified
         case .unknown: WatchStrings.verificationUnknown
+        }
+    }
+
+    private var audioSupportText: String {
+        switch context.viewState.audioSupport {
+        case .unchecked: WatchStrings.checkAudioSupport
+        case .checking: WatchStrings.checkingAudioSupport
+        case .supported: WatchStrings.opusSupported
+        case .unsupported: WatchStrings.opusUnsupported
         }
     }
 }
@@ -57,6 +72,18 @@ struct SettingsScreen_Previews: PreviewProvider {
         return viewModel
     }
 
+    static var audioSupported: SettingsScreenViewModel {
+        let viewModel = SettingsScreenViewModel(clientProxy: ClientProxyMock.preview)
+        viewModel.state.audioSupport = .supported
+        return viewModel
+    }
+
+    static var audioUnsupported: SettingsScreenViewModel {
+        let viewModel = SettingsScreenViewModel(clientProxy: ClientProxyMock.preview)
+        viewModel.state.audioSupport = .unsupported
+        return viewModel
+    }
+
     static var previews: some View {
         NavigationStack { SettingsScreen(context: SettingsScreenViewModel(clientProxy: ClientProxyMock.preview).context) }
             .previewDisplayName("Verified")
@@ -64,5 +91,9 @@ struct SettingsScreen_Previews: PreviewProvider {
             .previewDisplayName("Unverified with verify row")
         NavigationStack { SettingsScreen(context: checkingVerification.context) }
             .previewDisplayName("Checking verification")
+        NavigationStack { SettingsScreen(context: audioSupported.context) }
+            .previewDisplayName("Opus supported")
+        NavigationStack { SettingsScreen(context: audioUnsupported.context) }
+            .previewDisplayName("Opus unsupported")
     }
 }
