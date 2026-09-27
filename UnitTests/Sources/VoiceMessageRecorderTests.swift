@@ -100,6 +100,76 @@ struct VoiceMessageRecorderTests {
     }
 
     @Test
+    func interruptionAfterTheRecorderResetKeepsTheLastElapsed() async throws {
+        let harness = try await Harness.recording()
+        try await harness.advance(to: 2)
+        harness.backend.currentTime = 0
+
+        harness.interruptions.send()
+
+        guard case let .stopped(message) = harness.recorder.state else {
+            Issue.record("Expected a stopped recording")
+            return
+        }
+        #expect(message.duration == 2)
+        #expect(harness.recordingExists)
+        harness.removeRecording()
+    }
+
+    @Test
+    func stoppingTwiceOrInterruptingAfterStopDoesNothing() async throws {
+        let harness = try await Harness.recording()
+        try await harness.advance(to: 2)
+        harness.recorder.stop()
+        let stoppedState = harness.recorder.state
+
+        harness.recorder.stop()
+        harness.interruptions.send()
+
+        #expect(harness.recorder.state == stoppedState)
+        #expect(harness.backend.stopCallsCount == 1)
+        #expect(harness.audioSession.deactivateCallsCount == 1)
+        #expect(harness.recordingExists)
+        harness.removeRecording()
+    }
+
+    @Test
+    func nonFinitePowerIsSilence() async throws {
+        let harness = try await Harness.recording()
+
+        harness.backend.averagePowerReturnValue = -.infinity
+        try await harness.advance(to: 0.1)
+        #expect(harness.recorder.state == .recording(elapsed: 0.1, level: 0, isNearLimit: false))
+
+        harness.backend.averagePowerReturnValue = .nan
+        try await harness.advance(to: 0.2)
+        #expect(harness.recorder.state == .recording(elapsed: 0.2, level: 0, isNearLimit: false))
+        harness.recorder.cancel()
+    }
+
+    @Test
+    func startWhileRecordingFails() async throws {
+        let harness = try await Harness.recording()
+
+        #expect(await harness.recorder.start().error == .failed)
+        #expect(harness.backend.startUrlCallsCount == 1)
+        #expect(harness.recorder.state == .recording(elapsed: 0, level: 0, isNearLimit: false))
+        harness.recorder.cancel()
+    }
+
+    @Test
+    func releasingMidRecordingDeletesTheFile() async throws {
+        let harness = try await Harness.recording()
+        try await harness.advance(to: 2)
+
+        harness.releaseRecorder()
+
+        #expect(harness.backend.stopCallsCount == 1)
+        #expect(harness.audioSession.deactivateCallsCount == 1)
+        #expect(!harness.recordingExists)
+    }
+
+    @Test
     func cancelDeletesAndGoesIdle() async throws {
         let harness = try await Harness.recording()
         try await harness.advance(to: 5)
@@ -148,6 +218,19 @@ struct VoiceMessageRecorderTests {
         #expect(harness.recorder.state == .failed)
         #expect(harness.audioSession.deactivateCallsCount == 1)
         #expect(harness.clock.sleeperCount == 0)
+    }
+
+    @Test
+    func activationFailureFailsAndReleasesTheSession() async {
+        let harness = Harness()
+        harness.audioSession.activateForRecordingThrowableError = CancellationError()
+
+        let result = await harness.recorder.start()
+
+        #expect(result.error == .failed)
+        #expect(harness.recorder.state == .failed)
+        #expect(harness.audioSession.deactivateCallsCount == 1)
+        #expect(!harness.backend.startUrlCalled)
     }
 
     @Test
@@ -260,6 +343,10 @@ private final class Harness {
             guard case .recording = recorder.state else { return true }
             return clock.deadlines.first.map { $0 > target } ?? false
         }
+    }
+
+    func releaseRecorder() {
+        recorder = nil
     }
 
     func removeRecording() {

@@ -13,7 +13,7 @@ nonisolated enum VoiceRecorderState: Equatable, Sendable {
     case idle
     /// `level` is the input level in 0…1.
     case recording(elapsed: TimeInterval, level: Float, isNearLimit: Bool)
-    /// The recording's file now belongs to the caller.
+    /// The file is kept until the caller takes it, or calls `cancel()`, which deletes it.
     case stopped(RecordedVoiceMessage)
     /// Shorter than the minimum duration; the file is already deleted.
     case discarded
@@ -36,7 +36,7 @@ nonisolated enum VoiceRecorderError: Error, Equatable, Sendable {
 // sourcery: AutoMockable
 protocol AudioRecorderBackend: AnyObject {
     var currentTime: TimeInterval { get }
-    /// Fires when the system interrupts recording (a call, Siri…).
+    /// Fires when the system interrupts recording (a call, Siri…) or the recorder ends on its own.
     var interruptions: AnyPublisher<Void, Never> { get }
 
     func start(url: URL) throws
@@ -73,6 +73,8 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
     private let stateSubject = CurrentValueSubject<VoiceRecorderState, Never>(.idle)
     private var recordingURL: URL?
     private var samples: [Float] = []
+    /// The last `currentTime` seen, since `AVAudioRecorder` resets it to 0 once it stops.
+    private var lastElapsed: TimeInterval = 0
     private var hasWarned = false
     /// Bumped by `cancel`, so a start waiting on the permission prompt knows it was abandoned.
     private var startGeneration = 0
@@ -100,9 +102,8 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
 
     isolated deinit {
         guard isRecording else { return }
-        timerTask?.cancel()
-        backend.stop()
-        audioSession.deactivate()
+        stopRecording()
+        removeRecording()
     }
 
     func start() async -> Result<Void, VoiceRecorderError> {
@@ -117,6 +118,7 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
             try audioSession.activateForRecording()
         } catch {
             MXLog.error("Activating the audio session for recording failed")
+            audioSession.deactivate()
             stateSubject.send(.failed)
             return .failure(.failed)
         }
@@ -134,6 +136,7 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
         }
 
         samples = []
+        lastElapsed = 0
         hasWarned = false
         stateSubject.send(.recording(elapsed: 0, level: 0, isNearLimit: false))
         interruptionsCancellable = backend.interruptions.sink { [weak self] in
@@ -147,7 +150,7 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
 
     func stop() {
         guard isRecording else { return }
-        let duration = backend.currentTime
+        let duration = max(backend.currentTime, lastElapsed)
         stopRecording()
 
         guard duration >= minimumDuration, let recordingURL else {
@@ -197,7 +200,7 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
             var tick = 1
             while !Task.isCancelled {
                 do { try await sleep(tick) } catch { return }
-                guard let self else { return }
+                guard !Task.isCancelled, let self else { return }
                 self.tick()
                 tick += 1
             }
@@ -206,7 +209,8 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
 
     private func tick() {
         guard isRecording else { return }
-        let elapsed = backend.currentTime
+        let elapsed = max(backend.currentTime, lastElapsed)
+        lastElapsed = elapsed
         let level = Self.level(fromPower: backend.averagePower())
         samples.append(level)
 
@@ -258,8 +262,9 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
 }
 
 /// Records 48 kHz mono Float32 PCM to CAF with `AVAudioRecorder`, metering on.
-final class AVAudioRecorderBackend: AudioRecorderBackend {
+final class AVAudioRecorderBackend: NSObject, AudioRecorderBackend, AVAudioRecorderDelegate {
     private var recorder: AVAudioRecorder?
+    private let failures = PassthroughSubject<Void, Never>()
 
     var currentTime: TimeInterval { recorder?.currentTime ?? 0 }
 
@@ -270,6 +275,7 @@ final class AVAudioRecorderBackend: AudioRecorderBackend {
                 return type == .began
             }
             .map { _ in () }
+            .merge(with: failures)
             .receive(on: DispatchQueue.main)
             .eraseToAnyPublisher()
     }
@@ -284,6 +290,7 @@ final class AVAudioRecorderBackend: AudioRecorderBackend {
                                        AVLinearPCMIsNonInterleaved: false]
         let recorder = try AVAudioRecorder(url: url, settings: settings)
         recorder.isMeteringEnabled = true
+        recorder.delegate = self
         guard recorder.record() else { throw AVAudioRecorderBackendError.recordFailed }
         self.recorder = recorder
     }
@@ -297,6 +304,15 @@ final class AVAudioRecorderBackend: AudioRecorderBackend {
         guard let recorder else { return -.infinity }
         recorder.updateMeters()
         return recorder.averagePower(forChannel: 0)
+    }
+
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        guard !flag else { return }
+        Task { @MainActor in failures.send() }
+    }
+
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: (any Error)?) {
+        Task { @MainActor in failures.send() }
     }
 }
 
