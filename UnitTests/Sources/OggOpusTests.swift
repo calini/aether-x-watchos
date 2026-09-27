@@ -46,14 +46,14 @@ struct OggOpusTests {
 
         #expect(file.packets == packets)
         #expect(file.preSkip == 312)
-        #expect(file.granulePosition == (count == 0 ? 0 : 312 + frameCount))
+        #expect(file.granulePosition == (count == 0 ? 312 : 312 + frameCount))
         try expectValidPages(in: data)
     }
 
     @Test
     func lacingAndMultiPageRoundTrip() throws {
         let edgeSizes = [254, 255, 256, 510, 600]
-        let packets = edgeSizes.map(makePacket) + (0..<130).map { _ in makePacket(size: 80) } + [makePacket(size: 140_000)] + [makePacket(size: 255)]
+        let packets = edgeSizes.map(makePacket) + (0..<130).map { _ in makePacket(size: 80) } + [makePacket(size: 60000)] + [makePacket(size: 255)]
 
         let data = OggOpusWriter.write(packets: packets, preSkip: 312, frameCount: Int64(packets.count * 960 - 400))
         let file = try OggOpusReader.read(data)
@@ -61,21 +61,74 @@ struct OggOpusTests {
 
         let pages = try expectValidPages(in: data)
         let audioPages = pages.dropFirst(2)
-        #expect(audioPages.count >= 5)
+        #expect(audioPages.count >= 4)
         #expect(audioPages.allSatisfy { $0.completedPackets <= OggOpusWriter.packetsPerPage })
         // 254, 255, 256, 510 and 600 bytes: a packet of a multiple of 255 bytes ends with a 0 lacing value.
         #expect(Array(pages[2].lacing.prefix(11)) == [254, 255, 0, 255, 1, 255, 255, 0, 255, 255, 90])
 
-        // 140,000 bytes need 550 segments: the packet starts on a shared page, fills a page where no packet ends, then ends on a third.
-        let spanningIndex = try #require(pages.firstIndex { $0.lacing.count == 255 && $0.completedPackets == 0 })
-        #expect(pages[spanningIndex - 1].lacing.last == 255)
-        #expect(pages[spanningIndex].granule == -1)
-        #expect(pages[spanningIndex].flags & 0x01 == 0x01)
-        #expect(pages[spanningIndex + 1].flags & 0x01 == 0x01)
-        #expect(pages.filter { $0.flags & 0x01 == 0x01 }.count == 2)
+        // 60,000 bytes need 236 segments: the packet fills the rest of a shared page and ends on a continued one.
+        let fullIndex = try #require(pages.firstIndex { $0.lacing.count == 255 })
+        #expect(pages[fullIndex].lacing.last == 255)
+        #expect(pages[fullIndex].granule != -1)
+        #expect(pages[fullIndex + 1].flags & 0x01 == 0x01)
+        #expect(pages.filter { $0.flags & 0x01 == 0x01 }.count == 1)
 
         let granules = audioPages.map(\.granule).filter { $0 != -1 }
         #expect(granules == granules.sorted())
+    }
+
+    /// Only a packet over the reader's cap can span a page where no packet ends, so this checks the writer alone.
+    @Test
+    func writerSpansAPageWhereNoPacketEnds() throws {
+        let data = OggOpusWriter.write(packets: [makePacket(size: 80), makePacket(size: 140_000), makePacket(size: 80)], preSkip: 312, frameCount: 2500)
+
+        let pages = try expectValidPages(in: data)
+        #expect(pages.map(\.lacing.count) == [1, 1, 255, 255, 42])
+        #expect(pages.map(\.granule) == [0, 0, 960, -1, 312 + 2500])
+        #expect(pages.map { $0.flags & 0x01 } == [0, 0, 0, 0x01, 0x01])
+        #expect(throws: OggOpusError.invalidPage) { try OggOpusReader.read(data) }
+    }
+
+    @Test
+    func rejectsOversizedPackets() throws {
+        let largest = makePacket(size: OggOpusReader.maximumPacketSize)
+        let file = try OggOpusReader.read(OggOpusWriter.write(packets: [largest], preSkip: 312, frameCount: 600))
+        #expect(file.packets == [largest])
+
+        let oversized = OggOpusWriter.write(packets: [makePacket(size: OggOpusReader.maximumPacketSize + 1)], preSkip: 312, frameCount: 600)
+        #expect(throws: OggOpusError.invalidPage) { try OggOpusReader.read(oversized) }
+    }
+
+    @Test
+    func rejectsLyingPages() throws {
+        let headers = makePage(body: makeOpusHead(), flags: 0x02) + makePage(body: makeOpusTags())
+        let packet = makePacket(size: 10)
+
+        let bodyPastTheEnd = makePage(body: packet, lacing: [200])
+        let continuedFirstAudioPage = makePage(body: packet, flags: 0x01)
+        let incompleteAtEnd = makePage(body: makePacket(size: 255), lacing: [255])
+        let negativeGranule = makePage(body: packet, granule: -2)
+        let endsInsidePreSkip = makePage(body: packet, granule: 311)
+        for page in [bodyPastTheEnd, continuedFirstAudioPage, incompleteAtEnd, negativeGranule, endsInsidePreSkip] {
+            #expect(throws: OggOpusError.invalidPage) { try OggOpusReader.read(headers + page) }
+        }
+
+        let file = try OggOpusReader.read(headers + makePage(body: packet, flags: 0x04, granule: 312))
+        #expect(file.packets == [packet])
+        #expect(file.granulePosition == 312)
+    }
+
+    @Test
+    func acceptsOnlyMonoOrStereoFamilyZero() throws {
+        let tags = makePage(body: makeOpusTags())
+        let audio = makePage(body: makePacket(size: 10), flags: 0x04, granule: 1272)
+
+        let stereo = try OggOpusReader.read(makePage(body: makeOpusHead(channels: 2), flags: 0x02) + tags + audio)
+        #expect(stereo.channelCount == 2)
+
+        for head in [makeOpusHead(mappingFamily: 1), makeOpusHead(channels: 0), makeOpusHead(channels: 3)] {
+            #expect(throws: OggOpusError.notOpus) { try OggOpusReader.read(makePage(body: head, flags: 0x02) + tags + audio) }
+        }
     }
 
     @Test
@@ -96,6 +149,7 @@ struct OggOpusTests {
         #expect(Array(bytes[pages[1].bodyRange]) == Array("OpusTags".utf8) + [UInt8(vendor.count), 0, 0, 0] + vendor + [0, 0, 0, 0])
 
         let file = try OggOpusReader.read(data)
+        #expect(file.channelCount == 1)
         #expect(file.preSkip == 0x0138)
         #expect(file.inputSampleRate == 48000)
     }
@@ -228,14 +282,23 @@ struct OggOpusTests {
         return pages
     }
 
-    /// A single-page stream holding `body` as one packet.
-    private func makePage(body: Data, flags: UInt8) -> Data {
-        var lacing = [UInt8](repeating: 255, count: body.count / 255)
-        lacing.append(UInt8(body.count % 255))
-        var page = Array("OggS".utf8) + [0, flags] + [UInt8](repeating: 0, count: 20) + [UInt8(lacing.count)] + lacing + body
+    /// A page (serial 0, sequence 0) with a correct CRC holding `body` as one packet, unless `lacing` says otherwise.
+    private func makePage(body: Data, lacing: [UInt8]? = nil, flags: UInt8 = 0, granule: Int64 = 0) -> Data {
+        let lacing = lacing ?? [UInt8](repeating: 255, count: body.count / 255) + [UInt8(body.count % 255)]
+        let granuleBytes = (0..<8).map { UInt8(truncatingIfNeeded: UInt64(bitPattern: granule) >> ($0 * 8)) }
+        var page = Array("OggS".utf8) + [0, flags] + granuleBytes + [UInt8](repeating: 0, count: 12) + [UInt8(lacing.count)] + lacing + body
         let crc = referenceCRC(page)
         page.replaceSubrange(22..<26, with: (0..<4).map { UInt8(truncatingIfNeeded: crc >> ($0 * 8)) })
         return Data(page)
+    }
+
+    /// Pre-skip 312, 48 kHz.
+    private func makeOpusHead(channels: UInt8 = 1, mappingFamily: UInt8 = 0) -> Data {
+        Data(Array("OpusHead".utf8) + [1, channels, 0x38, 0x01, 0x80, 0xBB, 0, 0, 0, 0, mappingFamily])
+    }
+
+    private func makeOpusTags() -> Data {
+        Data(Array("OpusTags".utf8) + [0, 0, 0, 0, 0, 0, 0, 0])
     }
 
     /// A packet whose TOC byte (0xF8: CELT fullband, 20 ms, one frame) declares 960 samples.

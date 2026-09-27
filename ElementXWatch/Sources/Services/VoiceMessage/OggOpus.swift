@@ -15,11 +15,14 @@ nonisolated enum OggOpusError: Error, Equatable {
 }
 
 nonisolated struct OggOpusFile: Equatable, Sendable {
+    /// 1 (mono) or 2 (stereo).
+    let channelCount: UInt8
     let preSkip: UInt16
     let inputSampleRate: UInt32
     /// Audio packets, without the two header packets.
     let packets: [Data]
     /// The last page's granule: 48 kHz samples including pre-skip, so the real length is `granulePosition - preSkip`.
+    /// Never below `preSkip`; a stream without audio packets reports `preSkip`.
     let granulePosition: Int64
 }
 
@@ -93,10 +96,14 @@ nonisolated enum OggOpusWriter {
 
 /// Reads an Ogg Opus stream, validating every page's CRC and reassembling packets across pages.
 nonisolated enum OggOpusReader {
+    /// Bounds reassembly of hostile input: RFC 6716's 48 frames of 1,275 bytes (61,200), plus room for the TOC and frame lengths.
+    static let maximumPacketSize = 61440
+
     static func read(_ data: Data) throws(OggOpusError) -> OggOpusFile {
         let bytes = [UInt8](data)
         var packets: [Data] = []
-        var partialPacket: Data?
+        var partialPacket = Data()
+        var isPacketPending = false
         var granule: Int64 = 0
         var serialNumber: UInt32?
         var offset = 0
@@ -107,28 +114,40 @@ nonisolated enum OggOpusReader {
             // Only the first logical stream is followed.
             if serialNumber == nil { serialNumber = page.serialNumber }
             guard page.serialNumber == serialNumber else { continue }
-            guard page.isContinued == (partialPacket != nil) else { throw .invalidPage }
+            guard page.isContinued == isPacketPending else { throw .invalidPage }
 
             var segmentStart = page.bodyStart
             for lacingValue in page.lacing {
                 let segmentEnd = segmentStart + Int(lacingValue)
-                partialPacket = (partialPacket ?? Data()) + bytes[segmentStart..<segmentEnd]
+                partialPacket.append(contentsOf: bytes[segmentStart..<segmentEnd])
+                guard partialPacket.count <= maximumPacketSize else { throw .invalidPage }
                 segmentStart = segmentEnd
-                if lacingValue < 255, let packet = partialPacket {
-                    packets.append(packet)
-                    partialPacket = nil
+                isPacketPending = lacingValue == 255
+                if !isPacketPending {
+                    packets.append(partialPacket)
+                    partialPacket = Data()
                 }
             }
+            // -1 means no packet ends on the page; any other negative value is invalid.
+            guard page.granule >= -1 else { throw .invalidPage }
             if page.granule != -1 { granule = page.granule }
         }
-        guard partialPacket == nil else { throw .invalidPage }
+        guard !isPacketPending else { throw .invalidPage }
 
         guard let head = packets.first else { throw .missingHeaders }
         let header = try OpusHeader(head)
         guard packets.count >= 2, packets[1].starts(with: Data("OpusTags".utf8)) else { throw .missingHeaders }
-        return OggOpusFile(preSkip: header.preSkip,
+        let audioPackets = Array(packets.dropFirst(2))
+        // Audio must end after the pre-skip, so trimming to `granulePosition - preSkip` can't go negative.
+        if audioPackets.isEmpty {
+            granule = Int64(header.preSkip)
+        } else if granule < Int64(header.preSkip) {
+            throw .invalidPage
+        }
+        return OggOpusFile(channelCount: header.channelCount,
+                           preSkip: header.preSkip,
                            inputSampleRate: header.inputSampleRate,
-                           packets: Array(packets.dropFirst(2)),
+                           packets: audioPackets,
                            granulePosition: granule)
     }
 }
@@ -246,13 +265,17 @@ private nonisolated struct OggPageHeader {
 
 /// The fields of an `OpusHead` packet (RFC 7845 §5.1) that decoding needs.
 private nonisolated struct OpusHeader {
+    let channelCount: UInt8
     let preSkip: UInt16
     let inputSampleRate: UInt32
 
     init(_ packet: Data) throws(OggOpusError) {
         let bytes = [UInt8](packet)
         // Major version 0 (the upper nibble) is the only one defined.
-        guard bytes.count >= 19, bytes.starts(with: "OpusHead".utf8), bytes[8] & 0xF0 == 0, bytes[9] > 0 else { throw .notOpus }
+        guard bytes.count >= 19, bytes.starts(with: "OpusHead".utf8), bytes[8] & 0xF0 == 0 else { throw .notOpus }
+        // Only mapping family 0 (mono or stereo, no mapping table) is supported.
+        guard (1...2).contains(bytes[9]), bytes[18] == 0 else { throw .notOpus }
+        channelCount = bytes[9]
         preSkip = UInt16(littleEndian: bytes, at: 10)
         inputSampleRate = UInt32(littleEndian: bytes, at: 12)
     }
