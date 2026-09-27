@@ -79,10 +79,10 @@ Out of scope:
 | `OpusCodec` (`Services/VoiceMessage/OpusCodec.swift`) | `AVAudioConverter` between 48 kHz mono Float32 PCM and Opus (20 ms, 960-frame packets, 24 kbps). It encodes from an `AVAudioFile` in chunks, so memory stays bounded, and yields packets and the total frames. It decodes packets to PCM in chunks, writing into an `AVAudioFile` (CAF, PCM). It drops pre-skip samples when decoding. |
 | `VoiceMessageRecorderProtocol` / `VoiceMessageRecorder` | Wraps `AVAudioRecorder`, recording 48 kHz mono Linear PCM CAF to a temp file with metering on. It publishes the state `.idle / .recording(elapsed, level) / .stopped(url, duration, waveform) / .failed`. It samples the level every 100 ms for the meter and the waveform, and reduces the waveform to 100 values in 0…1. It handles the 4:30 warning, the 5:00 limit, the 1 s minimum (shorter recordings are discarded), and interruptions (stop and keep). Timers use an injectable clock, and the recorder backend sits behind a protocol for tests. |
 | `VoiceMessageEncoder` | Turns a PCM CAF into an `.ogg` file (`OpusCodec` plus `OggOpusWriter`), off the main actor, and returns the file, duration and size. |
-| `VoiceMessagePlayerProtocol` / `VoiceMessagePlayer` | One per session. `play(item:)`, `pause()`, `stop()`. It publishes `.idle / .preparing(id) / .playing(id, progress, elapsed) / .paused(id, …) / .failed(id)`. It prepares by downloading through `MediaLoader.loadContent` (or reading a local file), then `OggOpusReader` and `OpusCodec` decode into a cached CAF under Caches/VoiceMessages, keyed by the media source URL. The cache is capped at 20 MB, least recently used first. It plays with `AVAudioPlayer`, sets the audio session to `.playback` while playing and deactivates it afterwards. |
+| `VoiceMessagePlayerProtocol` / `VoiceMessagePlayer` | One per session. `play(item:)`, `pause()`, `stop()`. It publishes `.idle / .preparing(id) / .playing(id, progress, elapsed) / .paused(id, …) / .failed(id)`. It prepares by downloading through `MediaLoader.loadContent` (or reading a local file), then `OggOpusReader` and `OpusCodec` decode into a cached CAF under Caches/VoiceMessages, keyed by the media source URL. The cache is capped at 20 MB, least recently used first, and cleared on sign-out, since it holds decrypted audio. It plays with `AVAudioPlayer`, sets the audio session to `.playback` while playing and deactivates it afterwards. |
 | `AudioSessionProxy` | Sets the category and activates or deactivates the session, for recording (`.playAndRecord`, `.default`) and playback (`.playback`). Behind a protocol for tests. |
 | Timeline | `TimelineItemBody.voice(VoiceBody { duration, waveform: [Float] (0…1), source: MediaSourceProxy })`, mapped from audio with `voice != nil`. Other audio stays unsupported. |
-| `TimelineProxy.sendVoiceMessage(fileURL:duration:waveform:)` | Builds `UploadParameters(source: .file(filename: path), …)` and `AudioInfo(duration:, size:, mimetype: "audio/ogg")`, calls `timeline.sendVoiceMessage(...)`, and awaits `join()`. Returns `Result<Void, TimelineProxyError>`. |
+| `TimelineProxy.sendVoiceMessage(fileURL:duration:waveform:)` | Reads the file and builds `UploadParameters(source: .data(bytes:, filename: "voice-message.ogg"), …)` (the name Element X iOS uses, which becomes the event body) and `AudioInfo(duration:, size:, mimetype: "audio/ogg")`, calls `timeline.sendVoiceMessage(...)`, and awaits `join()`. Returns `Result<Void, TimelineProxyError>`. |
 | Screens | `VoiceRecordingScreen` (MVVM-C: recording, preparing, review, sending and error states); the `AttachmentsScreen` row; `VoiceMessageBubble` in `MessageBubble`. |
 | Config | `NSMicrophoneUsageDescription` = "Record voice messages in chats." |
 
@@ -94,8 +94,9 @@ Out of scope:
 | Recording interrupted | Recording stops and moves to Preparing and Review with what was recorded |
 | Recording under 1 s | Discarded silently; back to the Attachments sheet |
 | Encoding fails | Alert "Couldn't prepare voice message." Back to the Attachments sheet |
-| Sending fails | Alert "Couldn't send voice message." with Try again and Cancel; the file is kept |
-| Download or decoding fails | The bubble shows ⚠︎; tap to retry |
+| Sending fails | Alert "Couldn't send voice message." with Try again and Cancel; the file is kept. This covers failures to hand the message to the send queue; once queued, a network failure shows as a failed local echo in the chat, retried like any other message |
+| Download or decoding fails | The bubble shows ⚠︎; tap to retry. Files over 5 MB are refused, and decoding stops at 15 minutes (Element Web's limit), so a hostile file can't fill the disk |
+| Playback interrupted (a call, Siri, the app suspending) | Playback pauses and releases the audio session; ▶︎ resumes it |
 
 **Privacy:** audio contents and file paths are never logged, only events, durations and counts.
 

@@ -60,11 +60,19 @@ Microphone permission: the first recording asks for it. If it was declined, turn
 |---|---|---|---|
 | V1 | (+) → Voice message, record a few seconds, Stop, review (▶︎ plays it, the waveform spans the whole width), then Send: it plays in Element X on the iPhone. | | |
 | V2 | A voice message sent from the iPhone plays on the watch: the button spins while it loads, the waveform fills and the time counts up. Check it through the watch speaker and through AirPods. | | |
-| V3 | Record past 4:30: the watch taps your wrist and the time turns amber. At 5:00 recording stops by itself and goes to review. | | |
+| V3 | Record past 4:30: the watch taps your wrist and the time turns amber. At 5:00 recording stops by itself and goes to review. Watch for the tap in particular: recording mutes haptics unless the app allows them, which it now does. | | |
 | V4 | Interrupt a recording with a phone call: it stops and keeps what was recorded. | | |
 | V5 | Deny microphone permission: the recording screen explains how to turn it on, and nothing is recorded. | | |
 | V6 | Play one voice message, then another: the first stops. Leave the chat while one plays: playback stops. Open (+) while one plays: playback stops. | | |
 | V7 | With no connection, play a voice message that was never played: the button shows ⚠︎. Reconnect and tap it: it plays. | | |
+| V8 | Lower your wrist while recording, and again while a message plays: note what happens to each (recording keeps going or stops and keeps; playback pauses and ▶︎ resumes it). Repeat both with a live location share running. | | |
+| V9 | Ask Siri something, and take a call, while a message plays in a chat and while the review screen plays: playback pauses, ❚❚ turns back to ▶︎, and ▶︎ resumes it. | | |
+| V10 | Voice messages sent from Element Web and Element X Android play on the watch, and the watch's play in both. | | |
+| V11 | A 5-minute voice message from another device: note how long the spinner runs before it plays (the decode time). | | |
+| V12 | Battery over ~10 minutes of voice message playback (note start and end %). | | |
+| V13 | With AirPods connected, a message plays through them; disconnect them mid-message and note what happens. | | |
+| V14 | Tap ✕ while recording: the sheet closes and nothing is sent (and no recording is left playing or recording). | | |
+| V15 | Long-press a playing voice message: note whether playback stops when the actions open. | | |
 
 ## Transport audit
 
