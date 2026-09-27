@@ -9,6 +9,99 @@
 
 import Foundation
 
+nonisolated class AudioRecorderBackendMock: AudioRecorderBackend, @unchecked Sendable {
+    var currentTime: TimeInterval {
+        get { return underlyingCurrentTime }
+        set(value) { underlyingCurrentTime = value }
+    }
+    nonisolated(unsafe) var underlyingCurrentTime: TimeInterval!
+    var interruptions: AnyPublisher<Void, Never> {
+        get { return underlyingInterruptions }
+        set(value) { underlyingInterruptions = value }
+    }
+    nonisolated(unsafe) var underlyingInterruptions: AnyPublisher<Void, Never>!
+
+    //MARK: - start
+
+    nonisolated(unsafe) var startUrlThrowableError: Error?
+    private let startUrlCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startUrlUnderlyingCallsCount = 0
+    var startUrlCallsCount: Int {
+        get { startUrlCallsCountLock.withLock { startUrlUnderlyingCallsCount } }
+        set { startUrlCallsCountLock.withLock { startUrlUnderlyingCallsCount = newValue } }
+    }
+    var startUrlCalled: Bool {
+        return startUrlCallsCount > 0
+    }
+    private let startUrlReceivedUrlLock = NSLock()
+    private nonisolated(unsafe) var startUrlUnderlyingReceivedUrl: URL?
+    var startUrlReceivedUrl: URL? {
+        get { startUrlReceivedUrlLock.withLock { startUrlUnderlyingReceivedUrl } }
+        set { startUrlReceivedUrlLock.withLock { startUrlUnderlyingReceivedUrl = newValue } }
+    }
+    private let startUrlReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var startUrlUnderlyingReceivedInvocations: [URL] = []
+    var startUrlReceivedInvocations: [URL] {
+        get { startUrlReceivedInvocationsLock.withLock { startUrlUnderlyingReceivedInvocations } }
+        set { startUrlReceivedInvocationsLock.withLock { startUrlUnderlyingReceivedInvocations = newValue } }
+    }
+    nonisolated(unsafe) var startUrlClosure: ((URL) throws -> Void)?
+
+    func start(url: URL) throws {
+        if let error = startUrlThrowableError {
+            throw error
+        }
+        startUrlCallsCountLock.withLock { startUrlUnderlyingCallsCount += 1 }
+        startUrlReceivedUrl = url
+        startUrlReceivedInvocationsLock.withLock { startUrlUnderlyingReceivedInvocations.append(url) }
+        try startUrlClosure?(url)
+    }
+    //MARK: - stop
+
+    private let stopCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopUnderlyingCallsCount = 0
+    var stopCallsCount: Int {
+        get { stopCallsCountLock.withLock { stopUnderlyingCallsCount } }
+        set { stopCallsCountLock.withLock { stopUnderlyingCallsCount = newValue } }
+    }
+    var stopCalled: Bool {
+        return stopCallsCount > 0
+    }
+    nonisolated(unsafe) var stopClosure: (() -> Void)?
+
+    func stop() {
+        stopCallsCountLock.withLock { stopUnderlyingCallsCount += 1 }
+        stopClosure?()
+    }
+    //MARK: - averagePower
+
+    private let averagePowerCallsCountLock = NSLock()
+    private nonisolated(unsafe) var averagePowerUnderlyingCallsCount = 0
+    var averagePowerCallsCount: Int {
+        get { averagePowerCallsCountLock.withLock { averagePowerUnderlyingCallsCount } }
+        set { averagePowerCallsCountLock.withLock { averagePowerUnderlyingCallsCount = newValue } }
+    }
+    var averagePowerCalled: Bool {
+        return averagePowerCallsCount > 0
+    }
+
+    private let averagePowerReturnValueLock = NSLock()
+    private nonisolated(unsafe) var averagePowerUnderlyingReturnValue: Float!
+    var averagePowerReturnValue: Float! {
+        get { averagePowerReturnValueLock.withLock { averagePowerUnderlyingReturnValue } }
+        set { averagePowerReturnValueLock.withLock { averagePowerUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var averagePowerClosure: (() -> Float)?
+
+    func averagePower() -> Float {
+        averagePowerCallsCountLock.withLock { averagePowerUnderlyingCallsCount += 1 }
+        if let averagePowerClosure = averagePowerClosure {
+            return averagePowerClosure()
+        } else {
+            return averagePowerReturnValue
+        }
+    }
+}
 nonisolated class AudioSessionProxyMock: AudioSessionProxyProtocol, @unchecked Sendable {
     var recordPermission: MicrophonePermission {
         get { return underlyingRecordPermission }
@@ -1677,6 +1770,81 @@ nonisolated class UserSessionRestorerMock: UserSessionRestorerProtocol, @uncheck
         } else {
             return restoreReturnValue
         }
+    }
+}
+nonisolated class VoiceMessageRecorderMock: VoiceMessageRecorderProtocol, @unchecked Sendable {
+    var statePublisher: AnyPublisher<VoiceRecorderState, Never> {
+        get { return underlyingStatePublisher }
+        set(value) { underlyingStatePublisher = value }
+    }
+    nonisolated(unsafe) var underlyingStatePublisher: AnyPublisher<VoiceRecorderState, Never>!
+    var state: VoiceRecorderState {
+        get { return underlyingState }
+        set(value) { underlyingState = value }
+    }
+    nonisolated(unsafe) var underlyingState: VoiceRecorderState!
+
+    //MARK: - start
+
+    private let startCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startUnderlyingCallsCount = 0
+    var startCallsCount: Int {
+        get { startCallsCountLock.withLock { startUnderlyingCallsCount } }
+        set { startCallsCountLock.withLock { startUnderlyingCallsCount = newValue } }
+    }
+    var startCalled: Bool {
+        return startCallsCount > 0
+    }
+
+    private let startReturnValueLock = NSLock()
+    private nonisolated(unsafe) var startUnderlyingReturnValue: Result<Void, VoiceRecorderError>!
+    var startReturnValue: Result<Void, VoiceRecorderError>! {
+        get { startReturnValueLock.withLock { startUnderlyingReturnValue } }
+        set { startReturnValueLock.withLock { startUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var startClosure: (() async -> Result<Void, VoiceRecorderError>)?
+
+    @concurrent func start() async -> Result<Void, VoiceRecorderError> {
+        startCallsCountLock.withLock { startUnderlyingCallsCount += 1 }
+        if let startClosure = startClosure {
+            return await startClosure()
+        } else {
+            return startReturnValue
+        }
+    }
+    //MARK: - stop
+
+    private let stopCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopUnderlyingCallsCount = 0
+    var stopCallsCount: Int {
+        get { stopCallsCountLock.withLock { stopUnderlyingCallsCount } }
+        set { stopCallsCountLock.withLock { stopUnderlyingCallsCount = newValue } }
+    }
+    var stopCalled: Bool {
+        return stopCallsCount > 0
+    }
+    nonisolated(unsafe) var stopClosure: (() -> Void)?
+
+    func stop() {
+        stopCallsCountLock.withLock { stopUnderlyingCallsCount += 1 }
+        stopClosure?()
+    }
+    //MARK: - cancel
+
+    private let cancelCallsCountLock = NSLock()
+    private nonisolated(unsafe) var cancelUnderlyingCallsCount = 0
+    var cancelCallsCount: Int {
+        get { cancelCallsCountLock.withLock { cancelUnderlyingCallsCount } }
+        set { cancelCallsCountLock.withLock { cancelUnderlyingCallsCount = newValue } }
+    }
+    var cancelCalled: Bool {
+        return cancelCallsCount > 0
+    }
+    nonisolated(unsafe) var cancelClosure: (() -> Void)?
+
+    func cancel() {
+        cancelCallsCountLock.withLock { cancelUnderlyingCallsCount += 1 }
+        cancelClosure?()
     }
 }
 // swiftlint:enable all
