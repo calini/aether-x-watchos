@@ -49,6 +49,12 @@ final class AudioSessionProxy: AudioSessionProxyProtocol {
 
     func activateForRecording() throws {
         try session.setCategory(.playAndRecord, mode: .default)
+        // Recording mutes haptics by default, which would swallow the 4:30 warning.
+        do {
+            try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+        } catch {
+            MXLog.error("Allowing haptics while recording failed")
+        }
         try session.setActive(true)
     }
 
