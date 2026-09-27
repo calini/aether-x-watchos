@@ -17,6 +17,35 @@ struct VoiceMessageBubble: View {
     let playback: VoicePlaybackState
     let onTogglePlayback: () -> Void
 
+    private var isFailed: Bool {
+        if case .failed = playback { true } else { false }
+    }
+
+    private var progress: Double {
+        switch playback {
+        case .playing(_, let progress, _), .paused(_, let progress, _): progress
+        case .idle, .preparing, .failed: 0
+        }
+    }
+
+    /// The total length until it plays, then the time played.
+    private var time: String {
+        switch playback {
+        case .playing(_, _, let elapsed), .paused(_, _, let elapsed): elapsed.formattedMinutesSeconds()
+        case .idle, .preparing, .failed: voice.duration.formattedMinutesSeconds(roundingUp: true)
+        }
+    }
+
+    private var accessibilityValue: String {
+        switch playback {
+        case .idle: ""
+        case .preparing: WatchStrings.loading
+        case .playing: WatchStrings.playing
+        case .paused: WatchStrings.paused
+        case .failed: WatchStrings.playVoiceMessageFailed
+        }
+    }
+
     var body: some View {
         HStack(spacing: 6) {
             Button(action: onTogglePlayback) { buttonIcon }
@@ -55,35 +84,6 @@ struct VoiceMessageBubble: View {
             .resizable()
             .scaledToFit()
             .frame(width: 14, height: 14)
-    }
-
-    private var isFailed: Bool {
-        if case .failed = playback { true } else { false }
-    }
-
-    private var progress: Double {
-        switch playback {
-        case .playing(_, let progress, _), .paused(_, let progress, _): progress
-        case .idle, .preparing, .failed: 0
-        }
-    }
-
-    /// The total length until it plays, then the time played.
-    private var time: String {
-        switch playback {
-        case .playing(_, _, let elapsed), .paused(_, _, let elapsed): elapsed.formattedMinutesSeconds()
-        case .idle, .preparing, .failed: voice.duration.formattedMinutesSeconds(roundingUp: true)
-        }
-    }
-
-    private var accessibilityValue: String {
-        switch playback {
-        case .idle: ""
-        case .preparing: WatchStrings.loading
-        case .playing: WatchStrings.playing
-        case .paused: WatchStrings.paused
-        case .failed: WatchStrings.playVoiceMessageFailed
-        }
     }
 }
 

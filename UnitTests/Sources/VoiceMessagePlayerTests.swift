@@ -193,7 +193,80 @@ struct VoiceMessagePlayerTests {
         #expect(harness.cachedFiles == Set([harness.madeURLs[0], harness.madeURLs[3]].map(\.lastPathComponent)))
     }
 
+    @Test
+    func aSlowPrepareSupersededByAnotherIsDropped() async throws {
+        // Room for one decoded message only, so storing the first would evict the second.
+        let harness = try Harness(cacheLimitBytes: 150_000)
+        defer { harness.removeFiles() }
+        let first = try harness.source("a")
+        let gate = harness.gate(first)
+        let firstPlay = Task { await harness.player.play(id: "$a", source: first) }
+        try await waitUntil { harness.loadedSources.count == 1 }
+
+        try await harness.player.play(id: "$b", source: harness.source("b"))
+        gate.open()
+        await firstPlay.value
+
+        #expect(harness.player.state == .playing(id: "$b", progress: 0, elapsed: 0))
+        #expect(harness.madeURLs.count == 1)
+        #expect(harness.cachedFiles == [try #require(harness.madeURLs.first).lastPathComponent])
+        #expect(harness.audioSession.activateForPlaybackCallsCount == 1)
+    }
+
+    @Test
+    func stoppingWhilePreparingDropsIt() async throws {
+        let harness = try Harness()
+        defer { harness.removeFiles() }
+        let source = try harness.source("a")
+        let gate = harness.gate(source)
+        let play = Task { await harness.player.play(id: "$a", source: source) }
+        try await waitUntil { harness.loadedSources.count == 1 }
+        #expect(harness.player.state == .preparing(id: "$a"))
+
+        harness.player.stop()
+        gate.open()
+        await play.value
+
+        #expect(harness.player.state == .idle)
+        #expect(harness.madeURLs.isEmpty)
+        #expect(harness.cachedFiles.isEmpty)
+        #expect(!harness.audioSession.activateForPlaybackCalled)
+    }
+
+    @Test
+    func storingAMessageAlreadyCachedKeepsTheCachedFile() throws {
+        let harness = try Harness()
+        defer { harness.removeFiles() }
+        let cache = VoiceMessageCache(directory: harness.cacheDirectory, limitBytes: 20_000_000)
+        let key = VoiceMessageCache.key(for: "mxc://example.org/a")
+
+        // As when two stores of the same message race: the second finds the first's file in place.
+        let first = try cache.store(harness.ogg, for: key)
+        let second = try cache.store(harness.ogg, for: key)
+
+        #expect(second == first)
+        #expect(harness.cachedFiles == [first.lastPathComponent])
+        #expect(try FileManager.default.contentsOfDirectory(atPath: harness.cacheDirectory.path()).count == 1)
+    }
+
     // MARK: - Helpers
+
+    /// Holds a download until `open()`.
+    private final class Gate {
+        private var isOpen = false
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        func wait() async {
+            guard !isOpen else { return }
+            await withCheckedContinuation { continuation = $0 }
+        }
+
+        func open() {
+            isOpen = true
+            continuation?.resume()
+            continuation = nil
+        }
+    }
 
     private final class Harness {
         let cacheDirectory = FileManager.default.temporaryDirectory.appending(path: "VoiceMessagePlayerTests-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -205,6 +278,7 @@ struct VoiceMessagePlayerTests {
         private(set) var loadedSources: [MediaSourceProxy] = []
         private(set) var madeURLs: [URL] = []
         private(set) var backends: [AudioPlaybackBackendMock] = []
+        private var gates: [String: Gate] = [:]
         private(set) var player: VoiceMessagePlayer!
         private var cancellable: AnyCancellable?
 
@@ -219,6 +293,7 @@ struct VoiceMessagePlayerTests {
             content = { _ in ogg }
             player = VoiceMessagePlayer(loadContent: { [unowned self] source in
                                             loadedSources.append(source)
+                                            await gates[source.url]?.wait()
                                             return content(source)
                                         },
                                         audioSession: audioSession,
@@ -239,6 +314,12 @@ struct VoiceMessagePlayerTests {
 
         func source(_ name: String) throws -> MediaSourceProxy {
             try MediaSourceProxy(source: MediaSource.fromUrl(url: "mxc://example.org/\(name)"))
+        }
+
+        func gate(_ source: MediaSourceProxy) -> Gate {
+            let gate = Gate()
+            gates[source.url] = gate
+            return gate
         }
 
         /// Fires the next 0.1 s progress update.

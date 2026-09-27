@@ -51,15 +51,18 @@ struct VoiceMessagePreviewPlayerTests {
         let audioSession = AudioSessionProxyMock()
         let player = VoiceMessagePreviewPlayer(audioSession: audioSession)
         _ = await player.play(fileURL: message.fileURL)
+        let started = ContinuousClock.now
         var states: [VoiceMessagePreviewPlayerState] = []
         let cancellable = player.statePublisher.sink { states.append($0) }
         let stalePlayer = try AVAudioPlayer(contentsOf: recording)
 
         player.audioPlayerDidFinishPlaying(stalePlayer, successfully: true)
-        for _ in 0..<20 { await Task.yield() }
 
-        #expect(!states.contains(.stopped))
-        #expect(audioSession.deactivateCallsCount == 0)
+        // The real end of the 1 s file comes after the stale callback's hop, so only it may stop playback.
+        try await waitUntil { states.contains(.stopped) }
+        #expect(ContinuousClock.now - started > .milliseconds(800))
+        #expect(states.filter { $0 == .stopped }.count == 1)
+        #expect(audioSession.deactivateCallsCount == 1)
         player.stop()
         cancellable.cancel()
     }

@@ -66,8 +66,8 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
     private let makeAudioPlayer: (URL) throws -> AudioPlaybackBackend
     private let makeTickSleeper: () -> @Sendable (Int) async throws -> Void
     private let stateSubject = CurrentValueSubject<VoicePlaybackState, Never>(.idle)
-    /// The message that's playing or paused.
-    private var current: (id: String, backend: AudioPlaybackBackend)?
+    /// The message that's playing or paused, and its decoded file.
+    private var current: (id: String, backend: AudioPlaybackBackend, fileURL: URL)?
     /// Bumped by `stop`, so a prepare still running knows it was abandoned.
     private var generation = 0
     /// The session is shared with the recorder, so it's only released if playback took it.
@@ -111,7 +111,7 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
         stop()
         stateSubject.send(.preparing(id: id))
         let preparingGeneration = generation
-        let fileURL = await prepare(source)
+        let fileURL = await prepare(source, generation: preparingGeneration)
         guard preparingGeneration == generation else { return }
         guard let fileURL else {
             fail(id)
@@ -128,7 +128,7 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
         }
         let backendID = ObjectIdentifier(backend)
         backend.finishHandler = { [weak self] in self?.finishPlaying(backendID: backendID) }
-        current = (id, backend)
+        current = (id, backend, fileURL)
         startPlayback(id: id, backend: backend)
     }
 
@@ -154,7 +154,8 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
     // MARK: - Private
 
     /// The decoded file, from the cache or else downloaded and decoded into it.
-    private func prepare(_ source: MediaSourceProxy) async -> URL? {
+    /// Returns `nil` as soon as `stop` or another `play` supersedes `preparingGeneration`, skipping the decode.
+    private func prepare(_ source: MediaSourceProxy, generation preparingGeneration: Int) async -> URL? {
         let cache = cache
         let key = VoiceMessageCache.key(for: source.url)
         if let fileURL = await Task.detached(operation: { cache.cachedFile(for: key) }).value {
@@ -166,10 +167,16 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
             MXLog.error("Downloading the voice message failed")
             return nil
         }
-        let fileURL = await Task.detached { try? cache.store(oggData, for: key) }.value
-        if fileURL == nil {
+        guard preparingGeneration == generation else { return nil }
+
+        guard let fileURL = await Task.detached(operation: { try? cache.store(oggData, for: key) }).value else {
             MXLog.error("Decoding the voice message failed")
+            return nil
         }
+        // A superseded prepare leaves eviction to the next store, so it can't remove the message playing now.
+        guard preparingGeneration == generation else { return nil }
+        let keptURLs = [fileURL, current?.fileURL].compactMap(\.self)
+        await Task.detached { cache.evict(keeping: keptURLs) }.value
         return fileURL
     }
 
@@ -265,7 +272,7 @@ nonisolated struct VoiceMessageCache: Sendable {
         return fileURL
     }
 
-    /// Decodes `oggData` into the cache, then evicts older files over the limit.
+    /// Decodes `oggData` into the cache.
     func store(_ oggData: Data, for key: String) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let fileURL = fileURL(for: key)
@@ -274,17 +281,17 @@ nonisolated struct VoiceMessageCache: Sendable {
         defer { try? FileManager.default.removeItem(at: partialURL) }
 
         _ = try VoiceMessageDecoder.decode(oggData: oggData, to: partialURL)
-        try? FileManager.default.removeItem(at: fileURL)
-        try FileManager.default.moveItem(at: partialURL, to: fileURL)
-        evict(keeping: fileURL)
+        do {
+            try FileManager.default.moveItem(at: partialURL, to: fileURL)
+        } catch where FileManager.default.fileExists(atPath: fileURL.path()) {
+            // Another store of the same message got there first; its file is just as good.
+        }
         return fileURL
     }
 
-    private func fileURL(for key: String) -> URL {
-        directory.appending(path: "\(key).caf")
-    }
-
-    private func evict(keeping keptURL: URL) {
+    /// Removes the least recently used files, other than `keptURLs`, until the cache fits its limit.
+    func evict(keeping keptURLs: [URL]) {
+        let keptNames = Set(keptURLs.map(\.lastPathComponent))
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: Array(keys)) else { return }
         let files = urls
@@ -297,7 +304,7 @@ nonisolated struct VoiceMessageCache: Sendable {
 
         var totalSize = files.reduce(0) { $0 + $1.size }
         var evictedCount = 0
-        for file in files where totalSize > limitBytes && file.url.lastPathComponent != keptURL.lastPathComponent {
+        for file in files where totalSize > limitBytes && !keptNames.contains(file.url.lastPathComponent) {
             try? FileManager.default.removeItem(at: file.url)
             totalSize -= file.size
             evictedCount += 1
@@ -305,6 +312,10 @@ nonisolated struct VoiceMessageCache: Sendable {
         if evictedCount > 0 {
             MXLog.info("Evicted \(evictedCount) cached voice messages")
         }
+    }
+
+    private func fileURL(for key: String) -> URL {
+        directory.appending(path: "\(key).caf")
     }
 }
 
