@@ -98,6 +98,28 @@ Tests:
 - [ ] The locale test mutates the global `setlocale`.
 - [ ] Other older `\(error)` logs in `ClientProxy` (media, timeline, logout).
 
+### Voice messages
+
+Watch these on the device first (TESTING V1–V15):
+- [ ] The 4:30 haptic while recording. Haptics are now allowed during recording, but only a real watch can confirm it.
+- [ ] Battery while a message plays. The chat re-renders about 10 times a second; if that's costly, scope the progress to the playing bubble.
+- [ ] Whether the chat's `onDisappear` stops playback when a sheet opens (long-pressing a playing message), and whether ✕ during recording is caught.
+- [ ] AirPods routing with the `.playback` category and the default policy.
+
+Follow-ups:
+- [ ] Cap the download size before downloading. The 5 MB check runs after the file is in memory, and an earlier cap needs `MediaLoader`/SDK support.
+- [ ] The 5:00 limit relies on the tick task. Use `record(forDuration:)` as a backstop and treat a successful finish as a stop.
+- [ ] Recordings are Float32 (57.6 MB for 5 min); 16-bit would halve that.
+- [ ] Messages over about 3.5 min decode larger than the 20 MB cache and evict everything else.
+- [ ] `VoiceMessageCache.removeAll()` runs on the main actor at sign-out.
+- [ ] Tapping ▶︎ in the moment between a natural end and its finish callback can leave the state idle while audio plays.
+- [ ] Spurious `.error` logs when a preview decode is cancelled.
+- [ ] The failed-playback icon is Compound's `errorSolid` (a red "!"), not the ⚠︎ in the spec.
+- [ ] The Ogg reader doesn't validate page sequence numbers.
+- [ ] The packet cap also limits the OpusTags size, so there's no cover art.
+- [ ] Tests: two 50 ms negative-assertion sleeps; the clear-cache-during-decode race is untested; a stray blank line in `VoiceMessagePreviewPlayerTests`.
+- [ ] Cleanups: the `onChunkRead` parameter; the audio-support model isn't DEBUG-gated; the voice emoji is built at two call sites; `TimelineProxy` re-reads the size; the writer clamps granules instead of asserting.
+
 ### UI polish
 
 - [ ] The Verify sheet content goes blank while it animates away.
