@@ -1772,6 +1772,90 @@ nonisolated class UserSessionRestorerMock: UserSessionRestorerProtocol, @uncheck
         }
     }
 }
+nonisolated class VoiceMessagePreviewPlayerMock: VoiceMessagePreviewPlayerProtocol, @unchecked Sendable {
+    var statePublisher: AnyPublisher<VoiceMessagePreviewPlayerState, Never> {
+        get { return underlyingStatePublisher }
+        set(value) { underlyingStatePublisher = value }
+    }
+    nonisolated(unsafe) var underlyingStatePublisher: AnyPublisher<VoiceMessagePreviewPlayerState, Never>!
+
+    //MARK: - play
+
+    private let playFileURLCallsCountLock = NSLock()
+    private nonisolated(unsafe) var playFileURLUnderlyingCallsCount = 0
+    var playFileURLCallsCount: Int {
+        get { playFileURLCallsCountLock.withLock { playFileURLUnderlyingCallsCount } }
+        set { playFileURLCallsCountLock.withLock { playFileURLUnderlyingCallsCount = newValue } }
+    }
+    var playFileURLCalled: Bool {
+        return playFileURLCallsCount > 0
+    }
+    private let playFileURLReceivedFileURLLock = NSLock()
+    private nonisolated(unsafe) var playFileURLUnderlyingReceivedFileURL: URL?
+    var playFileURLReceivedFileURL: URL? {
+        get { playFileURLReceivedFileURLLock.withLock { playFileURLUnderlyingReceivedFileURL } }
+        set { playFileURLReceivedFileURLLock.withLock { playFileURLUnderlyingReceivedFileURL = newValue } }
+    }
+    private let playFileURLReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var playFileURLUnderlyingReceivedInvocations: [URL] = []
+    var playFileURLReceivedInvocations: [URL] {
+        get { playFileURLReceivedInvocationsLock.withLock { playFileURLUnderlyingReceivedInvocations } }
+        set { playFileURLReceivedInvocationsLock.withLock { playFileURLUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let playFileURLReturnValueLock = NSLock()
+    private nonisolated(unsafe) var playFileURLUnderlyingReturnValue: Result<Void, VoiceMessagePreviewPlayerError>!
+    var playFileURLReturnValue: Result<Void, VoiceMessagePreviewPlayerError>! {
+        get { playFileURLReturnValueLock.withLock { playFileURLUnderlyingReturnValue } }
+        set { playFileURLReturnValueLock.withLock { playFileURLUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var playFileURLClosure: ((URL) async -> Result<Void, VoiceMessagePreviewPlayerError>)?
+
+    @concurrent func play(fileURL: URL) async -> Result<Void, VoiceMessagePreviewPlayerError> {
+        playFileURLCallsCountLock.withLock { playFileURLUnderlyingCallsCount += 1 }
+        playFileURLReceivedFileURL = fileURL
+        playFileURLReceivedInvocationsLock.withLock { playFileURLUnderlyingReceivedInvocations.append(fileURL) }
+        if let playFileURLClosure = playFileURLClosure {
+            return await playFileURLClosure(fileURL)
+        } else {
+            return playFileURLReturnValue
+        }
+    }
+    //MARK: - pause
+
+    private let pauseCallsCountLock = NSLock()
+    private nonisolated(unsafe) var pauseUnderlyingCallsCount = 0
+    var pauseCallsCount: Int {
+        get { pauseCallsCountLock.withLock { pauseUnderlyingCallsCount } }
+        set { pauseCallsCountLock.withLock { pauseUnderlyingCallsCount = newValue } }
+    }
+    var pauseCalled: Bool {
+        return pauseCallsCount > 0
+    }
+    nonisolated(unsafe) var pauseClosure: (() -> Void)?
+
+    func pause() {
+        pauseCallsCountLock.withLock { pauseUnderlyingCallsCount += 1 }
+        pauseClosure?()
+    }
+    //MARK: - stop
+
+    private let stopCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopUnderlyingCallsCount = 0
+    var stopCallsCount: Int {
+        get { stopCallsCountLock.withLock { stopUnderlyingCallsCount } }
+        set { stopCallsCountLock.withLock { stopUnderlyingCallsCount = newValue } }
+    }
+    var stopCalled: Bool {
+        return stopCallsCount > 0
+    }
+    nonisolated(unsafe) var stopClosure: (() -> Void)?
+
+    func stop() {
+        stopCallsCountLock.withLock { stopUnderlyingCallsCount += 1 }
+        stopClosure?()
+    }
+}
 nonisolated class VoiceMessageRecorderMock: VoiceMessageRecorderProtocol, @unchecked Sendable {
     var statePublisher: AnyPublisher<VoiceRecorderState, Never> {
         get { return underlyingStatePublisher }

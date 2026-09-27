@@ -78,9 +78,16 @@ nonisolated enum OpusCodec {
     }
 
     /// Decodes packets to a 48 kHz mono PCM CAF at `outputURL`, dropping `preSkip` frames, in chunks.
+    /// A stereo stream (`channelCount` 2) is downmixed. `frameLimit` trims the output to the stream's real length.
     /// Returns the duration written.
-    static func decode(packets: [Data], preSkip: UInt16, to outputURL: URL) throws(OpusCodecError) -> TimeInterval {
-        guard let opusFormat = makeOpusFormat(), let decoder = AVAudioConverter(from: opusFormat, to: pcmFormat) else { throw .unavailable }
+    static func decode(packets: [Data],
+                       preSkip: UInt16,
+                       channelCount: UInt8 = 1,
+                       frameLimit: Int64? = nil,
+                       to outputURL: URL) throws(OpusCodecError) -> TimeInterval {
+        guard let opusFormat = makeOpusFormat(channelCount: channelCount),
+              let decoder = AVAudioConverter(from: opusFormat, to: pcmFormat) else { throw .unavailable }
+        decoder.downmix = true
         // Apple's decoder already drops 120 frames itself (any primeMethod), so audio starts ~2.5 ms early after pre-skip.
 
         let file: AVAudioFile
@@ -94,9 +101,10 @@ nonisolated enum OpusCodec {
         guard let output = AVAudioPCMBuffer(pcmFormat: pcmFormat, frameCapacity: framesPerPacket * 5) else { throw .decodingFailed }
         var remainingPackets = packets[...]
         var framesToSkip = AVAudioFrameCount(preSkip)
+        let frameLimit = max(frameLimit ?? .max, 0)
         var framesWritten: Int64 = 0
 
-        while true {
+        while framesWritten < frameLimit {
             output.frameLength = 0
             var conversionError: NSError?
             let status = decoder.convert(to: output, error: &conversionError) { _, inputStatus in
@@ -112,8 +120,10 @@ nonisolated enum OpusCodec {
             let skipped = min(framesToSkip, output.frameLength)
             framesToSkip -= skipped
             if output.frameLength > skipped {
-                do { try file.write(from: dropping(skipped, from: output)) } catch { throw .decodingFailed }
-                framesWritten += Int64(output.frameLength - skipped)
+                let chunk = dropping(skipped, from: output)
+                chunk.frameLength = AVAudioFrameCount(min(Int64(chunk.frameLength), frameLimit - framesWritten))
+                do { try file.write(from: chunk) } catch { throw .decodingFailed }
+                framesWritten += Int64(chunk.frameLength)
             }
             if status == .endOfStream { break }
         }
@@ -146,14 +156,14 @@ nonisolated enum OpusCodec {
 
     // MARK: - Private
 
-    private static func makeOpusFormat() -> AVAudioFormat? {
+    private static func makeOpusFormat(channelCount: UInt8 = 1) -> AVAudioFormat? {
         var description = AudioStreamBasicDescription(mSampleRate: sampleRate,
                                                       mFormatID: kAudioFormatOpus,
                                                       mFormatFlags: 0,
                                                       mBytesPerPacket: 0,
                                                       mFramesPerPacket: framesPerPacket,
                                                       mBytesPerFrame: 0,
-                                                      mChannelsPerFrame: 1,
+                                                      mChannelsPerFrame: UInt32(channelCount),
                                                       mBitsPerChannel: 0,
                                                       mReserved: 0)
         return AVAudioFormat(streamDescription: &description)

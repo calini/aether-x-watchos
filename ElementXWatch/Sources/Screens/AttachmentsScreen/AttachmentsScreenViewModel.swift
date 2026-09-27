@@ -24,6 +24,8 @@ final class AttachmentsScreenViewModel: AttachmentsScreenViewModelType, Attachme
         switch viewAction {
         case .location:
             actionsSubject.send(.location)
+        case .voiceMessage:
+            actionsSubject.send(.voiceMessage)
         }
     }
 }

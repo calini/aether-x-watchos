@@ -17,6 +17,7 @@ struct ChatScreenCoordinatorParameters {
     let roomLocationProxy: RoomLocationProxyProtocol?
     let locationServices: LocationServices
     let mapSnapshotLoader: MapSnapshotLoaderProtocol
+    let audioSession: AudioSessionProxyProtocol
     /// Names another room, e.g. the one a live share runs in; `nil` if unknown.
     let roomNameForID: (String) -> String?
 }
@@ -64,6 +65,10 @@ final class ChatScreenCoordinator: CoordinatorProtocol {
                                                                locationServices: parameters.locationServices,
                                                                timelineProxy: parameters.timelineProxy,
                                                                mapSnapshotLoader: parameters.mapSnapshotLoader))
+        } makeVoiceRecording: {
+            VoiceRecordingScreenCoordinator(parameters: .init(recorder: VoiceMessageRecorder(audioSession: parameters.audioSession),
+                                                              timelineProxy: parameters.timelineProxy,
+                                                              audioSession: parameters.audioSession))
         }
         attachmentsCancellable = coordinator.actionsPublisher
             .sink { [weak self] action in

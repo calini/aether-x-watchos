@@ -9,8 +9,10 @@ struct AttachmentsScreenViewState: BindableState { }
 
 enum AttachmentsScreenViewAction {
     case location
+    case voiceMessage
 }
 
 enum AttachmentsScreenViewModelAction {
     case location
+    case voiceMessage
 }

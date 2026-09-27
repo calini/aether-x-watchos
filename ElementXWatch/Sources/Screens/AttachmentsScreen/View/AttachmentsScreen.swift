@@ -13,6 +13,7 @@ struct AttachmentsScreen: View {
     var body: some View {
         List {
             Button(WatchStrings.locationRow) { context.send(viewAction: .location) }
+            Button(WatchStrings.voiceMessageRow) { context.send(viewAction: .voiceMessage) }
         }
         .navigationTitle(WatchStrings.attachmentsTitle)
     }

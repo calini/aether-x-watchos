@@ -21,4 +21,16 @@ struct AttachmentsScreenViewModelTests {
         #expect(actions == [.location])
         cancellable.cancel()
     }
+
+    @Test
+    func voiceMessageIsForwarded() {
+        let viewModel = AttachmentsScreenViewModel()
+        var actions: [AttachmentsScreenViewModelAction] = []
+        let cancellable = viewModel.actionsPublisher.sink { actions.append($0) }
+
+        viewModel.context.send(viewAction: .voiceMessage)
+
+        #expect(actions == [.voiceMessage])
+        cancellable.cancel()
+    }
 }

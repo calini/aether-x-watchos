@@ -17,21 +17,26 @@ enum AttachmentsScreenCoordinatorAction {
 final class AttachmentsScreenCoordinator: CoordinatorProtocol {
     @Observable final class Navigation {
         var locationSharing: LocationSharingScreenCoordinator?
+        var voiceRecording: VoiceRecordingScreenCoordinator?
     }
 
     private let viewModel = AttachmentsScreenViewModel()
     private let makeLocationSharing: () -> LocationSharingScreenCoordinator
+    private let makeVoiceRecording: () -> VoiceRecordingScreenCoordinator
     private let navigation = Navigation()
     private let actionsSubject = PassthroughSubject<AttachmentsScreenCoordinatorAction, Never>()
     private var cancellables = Set<AnyCancellable>()
     private var locationSharingCancellable: AnyCancellable?
+    private var voiceRecordingCancellable: AnyCancellable?
 
     var actionsPublisher: AnyPublisher<AttachmentsScreenCoordinatorAction, Never> {
         actionsSubject.eraseToAnyPublisher()
     }
 
-    init(makeLocationSharing: @escaping () -> LocationSharingScreenCoordinator) {
+    init(makeLocationSharing: @escaping () -> LocationSharingScreenCoordinator,
+         makeVoiceRecording: @escaping () -> VoiceRecordingScreenCoordinator) {
         self.makeLocationSharing = makeLocationSharing
+        self.makeVoiceRecording = makeVoiceRecording
     }
 
     func start() {
@@ -39,6 +44,7 @@ final class AttachmentsScreenCoordinator: CoordinatorProtocol {
             .sink { [weak self] action in
                 switch action {
                 case .location: self?.showLocationSharing()
+                case .voiceMessage: self?.showVoiceRecording()
                 }
             }
             .store(in: &cancellables)
@@ -59,6 +65,19 @@ final class AttachmentsScreenCoordinator: CoordinatorProtocol {
         coordinator.start()
         navigation.locationSharing = coordinator
     }
+
+    private func showVoiceRecording() {
+        let coordinator = makeVoiceRecording()
+        voiceRecordingCancellable = coordinator.actionsPublisher
+            .sink { [weak self] action in
+                switch action {
+                case .done: self?.actionsSubject.send(.dismiss)
+                case .cancelled: self?.navigation.voiceRecording = nil
+                }
+            }
+        coordinator.start()
+        navigation.voiceRecording = coordinator
+    }
 }
 
 private struct AttachmentsFlowView: View {
@@ -70,11 +89,20 @@ private struct AttachmentsFlowView: View {
                 set: { if !$0 { navigation.locationSharing = nil } })
     }
 
+    private var isShowingVoiceRecording: Binding<Bool> {
+        Binding(get: { navigation.voiceRecording != nil },
+                set: { if !$0 { navigation.voiceRecording = nil } })
+    }
+
     var body: some View {
         NavigationStack {
-            root.navigationDestination(isPresented: isShowingLocationSharing) {
-                navigation.locationSharing?.toPresentable()
-            }
+            root
+                .navigationDestination(isPresented: isShowingLocationSharing) {
+                    navigation.locationSharing?.toPresentable()
+                }
+                .navigationDestination(isPresented: isShowingVoiceRecording) {
+                    navigation.voiceRecording?.toPresentable()
+                }
         }
     }
 }
