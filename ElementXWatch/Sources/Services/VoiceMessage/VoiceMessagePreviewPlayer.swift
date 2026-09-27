@@ -31,24 +31,32 @@ protocol VoiceMessagePreviewPlayerProtocol: AnyObject {
     func stop()
 }
 
-final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtocol, AVAudioPlayerDelegate {
+final class VoiceMessagePreviewPlayer: VoiceMessagePreviewPlayerProtocol {
     private static let progressInterval = Duration.milliseconds(100)
 
     private let audioSession: AudioSessionProxyProtocol
+    private let makeAudioPlayer: (URL) throws -> AudioPlaybackBackend
+    private let makeTickSleeper: () -> @Sendable (Int) async throws -> Void
     private let stateSubject = CurrentValueSubject<VoiceMessagePreviewPlayerState, Never>(.stopped)
-    private var player: AVAudioPlayer?
+    private var backend: AudioPlaybackBackend?
     private var sourceURL: URL?
     private var decodedURL: URL?
     /// Bumped by `stop`, so a decode still running knows it was abandoned.
     private var generation = 0
+    /// The session is shared with the recorder, so it's only released if playback took it.
+    private var isHoldingSession = false
     private var progressTask: Task<Void, Never>?
 
     var statePublisher: AnyPublisher<VoiceMessagePreviewPlayerState, Never> {
         stateSubject.eraseToAnyPublisher()
     }
 
-    init(audioSession: AudioSessionProxyProtocol) {
+    init(audioSession: AudioSessionProxyProtocol,
+         makeAudioPlayer: @escaping (URL) throws -> AudioPlaybackBackend = { try AVAudioPlayerBackend(url: $0) },
+         clock: some Clock<Duration> = ContinuousClock()) {
         self.audioSession = audioSession
+        self.makeAudioPlayer = makeAudioPlayer
+        makeTickSleeper = { Self.tickSleeper(on: clock) }
     }
 
     isolated deinit {
@@ -56,11 +64,11 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
     }
 
     func play(fileURL: URL) async -> Result<Void, VoiceMessagePreviewPlayerError> {
-        if player == nil || sourceURL != fileURL {
+        if backend == nil || sourceURL != fileURL {
             stop()
             guard await prepare(fileURL: fileURL) else { return .failure(.failed) }
         }
-        guard let player else { return .failure(.failed) }
+        guard let backend else { return .failure(.failed) }
 
         do {
             try audioSession.activateForPlayback()
@@ -68,8 +76,9 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
             MXLog.error("Activating the audio session for playback failed")
             return .failure(.failed)
         }
-        guard player.play() else {
-            audioSession.deactivate()
+        isHoldingSession = true
+        guard backend.play() else {
+            releaseSession()
             return .failure(.failed)
         }
         startProgressUpdates()
@@ -77,33 +86,23 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
     }
 
     func pause() {
-        guard let player, player.isPlaying else { return }
-        player.pause()
-        stopProgressUpdates()
-        audioSession.deactivate()
-        stateSubject.send(.paused(progress: progress(of: player)))
+        guard case .playing = stateSubject.value, let backend else { return }
+        backend.pause()
+        moveToPaused(backend)
     }
 
     func stop() {
         generation += 1
-        if let player {
-            let wasPlaying = player.isPlaying
-            player.stop()
-            if wasPlaying { audioSession.deactivate() }
-        }
-        player = nil
+        backend?.stop()
+        backend = nil
         sourceURL = nil
         stopProgressUpdates()
+        releaseSession()
         if let decodedURL {
             try? FileManager.default.removeItem(at: decodedURL)
             self.decodedURL = nil
         }
         stateSubject.send(.stopped)
-    }
-
-    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        let playerID = ObjectIdentifier(player)
-        Task { @MainActor in finishPlaying(playerID: playerID) }
     }
 
     // MARK: - Private
@@ -123,35 +122,57 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
             }
         }.value
 
-        guard isDecoded, preparingGeneration == generation, let player = try? AVAudioPlayer(contentsOf: outputURL) else {
+        guard isDecoded, preparingGeneration == generation, let backend = try? makeAudioPlayer(outputURL) else {
             if !isDecoded { MXLog.error("Decoding the voice message preview failed") }
             try? FileManager.default.removeItem(at: outputURL)
             return false
         }
-        player.delegate = self
-        self.player = player
+        let backendID = ObjectIdentifier(backend)
+        backend.finishHandler = { [weak self] in self?.finishPlaying(backendID: backendID) }
+        self.backend = backend
         sourceURL = fileURL
         decodedURL = outputURL
         return true
     }
 
-    /// `playerID` names the player that finished: a late callback from one that was since replaced is ignored,
+    /// `backendID` names the player that finished: a late callback from one that was since replaced is ignored,
     /// so it can't release the session or reset newer playback.
-    private func finishPlaying(playerID: ObjectIdentifier) {
-        guard let player, ObjectIdentifier(player) == playerID else { return }
+    private func finishPlaying(backendID: ObjectIdentifier) {
+        guard let backend, ObjectIdentifier(backend) == backendID else { return }
         stopProgressUpdates()
-        audioSession.deactivate()
+        releaseSession()
         stateSubject.send(.stopped)
+    }
+
+    private func moveToPaused(_ backend: AudioPlaybackBackend) {
+        stopProgressUpdates()
+        releaseSession()
+        stateSubject.send(.paused(progress: Self.progress(of: backend)))
+    }
+
+    private func releaseSession() {
+        guard isHoldingSession else { return }
+        isHoldingSession = false
+        audioSession.deactivate()
     }
 
     private func startProgressUpdates() {
         stopProgressUpdates()
-        stateSubject.send(.playing(progress: player.map(progress) ?? 0))
+        stateSubject.send(.playing(progress: backend.map(Self.progress) ?? 0))
+        let sleep = makeTickSleeper()
         progressTask = Task { [weak self] in
+            var tick = 1
             while !Task.isCancelled {
-                try? await Task.sleep(for: Self.progressInterval)
-                guard !Task.isCancelled, let self, let player = self.player, player.isPlaying else { return }
-                self.stateSubject.send(.playing(progress: self.progress(of: player)))
+                do { try await sleep(tick) } catch { return }
+                guard !Task.isCancelled, let self, let backend = self.backend else { return }
+                guard backend.isPlaying else {
+                    // The system paused it (a call, Siri, the app suspending): let ▶︎ resume it.
+                    MXLog.info("Voice message preview playback was interrupted")
+                    self.moveToPaused(backend)
+                    return
+                }
+                self.stateSubject.send(.playing(progress: Self.progress(of: backend)))
+                tick += 1
             }
         }
     }
@@ -161,8 +182,14 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
         progressTask = nil
     }
 
-    private func progress(of player: AVAudioPlayer) -> Double {
-        guard player.duration > 0 else { return 0 }
-        return min(max(player.currentTime / player.duration, 0), 1)
+    private static func progress(of backend: AudioPlaybackBackend) -> Double {
+        guard backend.duration > 0 else { return 0 }
+        return min(max(backend.currentTime / backend.duration, 0), 1)
+    }
+
+    /// Sleeps until tick `n` from now, so ticks don't drift when one runs late.
+    private static func tickSleeper(on clock: some Clock<Duration>) -> @Sendable (Int) async throws -> Void {
+        let start = clock.now
+        return { tick in try await clock.sleep(until: start.advanced(by: progressInterval * tick), tolerance: nil) }
     }
 }

@@ -48,6 +48,8 @@ protocol VoiceMessagePlayerProtocol: AnyObject {
 protocol AudioPlaybackBackend: AnyObject {
     var duration: TimeInterval { get }
     var currentTime: TimeInterval { get }
+    /// False once paused or stopped, whether by us or by the system (a call, Siri, the app suspending).
+    var isPlaying: Bool { get }
     /// Called on the main actor when playback reaches the end.
     var finishHandler: (() -> Void)? { get set }
 
@@ -135,9 +137,7 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
     func pause() {
         guard case .playing(let id, _, _) = state, let backend = current?.backend else { return }
         backend.pause()
-        stopProgressUpdates()
-        releaseSession()
-        stateSubject.send(.paused(id: id, progress: Self.progress(of: backend), elapsed: backend.currentTime))
+        moveToPaused(id: id, backend: backend)
     }
 
     func stop() {
@@ -221,6 +221,12 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
         stateSubject.send(.failed(id: id))
     }
 
+    private func moveToPaused(id: String, backend: AudioPlaybackBackend) {
+        stopProgressUpdates()
+        releaseSession()
+        stateSubject.send(.paused(id: id, progress: Self.progress(of: backend), elapsed: backend.currentTime))
+    }
+
     private func releaseSession() {
         guard isHoldingSession else { return }
         isHoldingSession = false
@@ -235,6 +241,12 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
             while !Task.isCancelled {
                 do { try await sleep(tick) } catch { return }
                 guard !Task.isCancelled, let self, case .playing(let id, _, _) = self.state, let backend = self.current?.backend else { return }
+                guard backend.isPlaying else {
+                    // The system paused it (a call, Siri, the app suspending): let ▶︎ resume it.
+                    MXLog.info("Voice message playback was interrupted")
+                    self.moveToPaused(id: id, backend: backend)
+                    return
+                }
                 self.stateSubject.send(.playing(id: id, progress: Self.progress(of: backend), elapsed: backend.currentTime))
                 tick += 1
             }
@@ -341,6 +353,7 @@ final class AVAudioPlayerBackend: NSObject, AudioPlaybackBackend, AVAudioPlayerD
     var finishHandler: (() -> Void)?
     var duration: TimeInterval { player.duration }
     var currentTime: TimeInterval { player.currentTime }
+    var isPlaying: Bool { player.isPlaying }
 
     init(url: URL) throws {
         player = try AVAudioPlayer(contentsOf: url)

@@ -20,6 +20,11 @@ nonisolated class AudioPlaybackBackendMock: AudioPlaybackBackend, @unchecked Sen
         set(value) { underlyingCurrentTime = value }
     }
     nonisolated(unsafe) var underlyingCurrentTime: TimeInterval!
+    var isPlaying: Bool {
+        get { return underlyingIsPlaying }
+        set(value) { underlyingIsPlaying = value }
+    }
+    nonisolated(unsafe) var underlyingIsPlaying: Bool!
     nonisolated(unsafe) var finishHandler: (() -> Void)?
 
     //MARK: - play

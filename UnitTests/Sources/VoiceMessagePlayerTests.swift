@@ -93,6 +93,31 @@ struct VoiceMessagePlayerTests {
     }
 
     @Test
+    func anInterruptionPausesAndReleasesTheSession() async throws {
+        let harness = try Harness()
+        defer { harness.removeFiles() }
+        let source = try harness.source("a")
+        await harness.player.play(id: "$a", source: source)
+        harness.backends[0].currentTime = 0.25
+
+        // The system paused the player, as a call or Siri does.
+        harness.backends[0].isPlaying = false
+        try await harness.tick()
+
+        #expect(harness.player.state == .paused(id: "$a", progress: 0.25, elapsed: 0.25))
+        #expect(harness.audioSession.deactivateCallsCount == 1)
+        try await waitUntil { harness.clock.sleeperCount == 0 }
+
+        harness.backends[0].isPlaying = true
+        await harness.player.play(id: "$a", source: source)
+
+        #expect(harness.player.state == .playing(id: "$a", progress: 0.25, elapsed: 0.25))
+        #expect(harness.backends.count == 1)
+        #expect(harness.backends[0].playCallsCount == 2)
+        #expect(harness.audioSession.activateForPlaybackCallsCount == 2)
+    }
+
+    @Test
     func endReturnsToIdleAndReleasesSession() async throws {
         let harness = try Harness()
         defer { harness.removeFiles() }
@@ -336,6 +361,7 @@ struct VoiceMessagePlayerTests {
                                             let backend = AudioPlaybackBackendMock()
                                             backend.duration = 1
                                             backend.currentTime = 0
+                                            backend.isPlaying = true
                                             backend.playReturnValue = true
                                             backends.append(backend)
                                             return backend
