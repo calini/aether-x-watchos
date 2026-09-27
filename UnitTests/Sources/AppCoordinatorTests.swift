@@ -299,30 +299,30 @@ struct AppCoordinatorTests {
     }
 
     @Test
-    func signingOutStopsVoicePlayback() async throws {
+    func signingOutStopsVoicePlaybackAndClearsItsCache() async throws {
         let (coordinator, restorer, _, setup) = makeCoordinator()
         restorer.restoreReturnValue = .success(setup.clientProxy)
         await coordinator.start()
         #expect(setup.calls.values.contains("makeVoiceMessageServices"))
 
         var callOrder: [String] = []
-        setup.voiceMessagePlayer.stopClosure = { callOrder.append("stopVoicePlayback") }
+        setup.voiceMessagePlayer.stopAndClearCacheClosure = { callOrder.append("stopAndClearCache") }
         setup.clientProxy.logoutClosure = { callOrder.append("logout") }
 
         await coordinator.signOut()
 
-        #expect(callOrder == ["stopVoicePlayback", "logout"])
+        #expect(callOrder == ["stopAndClearCache", "logout"])
     }
 
     @Test
-    func authErrorsStopVoicePlayback() async throws {
+    func authErrorsStopVoicePlaybackAndClearItsCache() async throws {
         let (coordinator, restorer, _, setup) = makeCoordinator()
         restorer.restoreReturnValue = .success(setup.clientProxy)
         await coordinator.start()
 
         setup.actions.send(.authError(isSoftLogout: false))
 
-        try await waitUntil { setup.voiceMessagePlayer.stopCallsCount == 1 }
+        try await waitUntil { setup.voiceMessagePlayer.stopAndClearCacheCallsCount == 1 }
     }
 
     // MARK: - Helpers

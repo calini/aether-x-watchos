@@ -239,6 +239,29 @@ struct VoiceMessagePlayerTests {
     }
 
     @Test
+    func clearingTheCacheStopsAndDeletesEveryDecodedMessage() async throws {
+        let harness = try Harness()
+        defer { harness.removeFiles() }
+        let first = try harness.source("a")
+        await harness.player.play(id: "$a", source: first)
+        try await harness.player.play(id: "$b", source: harness.source("b"))
+        #expect(harness.cachedFiles.count == 2)
+
+        harness.player.stopAndClearCache()
+
+        #expect(harness.player.state == .idle)
+        #expect(harness.backends[1].stopCallsCount == 1)
+        #expect(harness.audioSession.deactivateCallsCount == 2)
+        #expect(!FileManager.default.fileExists(atPath: harness.cacheDirectory.path()))
+
+        // Played again, it's downloaded again.
+        await harness.player.play(id: "$a", source: first)
+
+        #expect(harness.loadedSources.count == 3)
+        #expect(harness.player.state == .playing(id: "$a", progress: 0, elapsed: 0))
+    }
+
+    @Test
     func stoppingWhilePreparingDropsIt() async throws {
         let harness = try Harness()
         defer { harness.removeFiles() }

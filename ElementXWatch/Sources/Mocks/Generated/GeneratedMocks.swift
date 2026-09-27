@@ -1930,6 +1930,23 @@ nonisolated class VoiceMessagePlayerMock: VoiceMessagePlayerProtocol, @unchecked
         stopCallsCountLock.withLock { stopUnderlyingCallsCount += 1 }
         stopClosure?()
     }
+    //MARK: - stopAndClearCache
+
+    private let stopAndClearCacheCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopAndClearCacheUnderlyingCallsCount = 0
+    var stopAndClearCacheCallsCount: Int {
+        get { stopAndClearCacheCallsCountLock.withLock { stopAndClearCacheUnderlyingCallsCount } }
+        set { stopAndClearCacheCallsCountLock.withLock { stopAndClearCacheUnderlyingCallsCount = newValue } }
+    }
+    var stopAndClearCacheCalled: Bool {
+        return stopAndClearCacheCallsCount > 0
+    }
+    nonisolated(unsafe) var stopAndClearCacheClosure: (() -> Void)?
+
+    func stopAndClearCache() {
+        stopAndClearCacheCallsCountLock.withLock { stopAndClearCacheUnderlyingCallsCount += 1 }
+        stopAndClearCacheClosure?()
+    }
 }
 nonisolated class VoiceMessagePreviewPlayerMock: VoiceMessagePreviewPlayerProtocol, @unchecked Sendable {
     var statePublisher: AnyPublisher<VoiceMessagePreviewPlayerState, Never> {

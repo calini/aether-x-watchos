@@ -210,8 +210,9 @@ import SwiftUI
         }
     }
 
+    /// Also deletes the decoded messages, as some came decrypted from encrypted rooms.
     private func stopVoicePlayback() {
-        voiceMessageServices?.player.stop()
+        voiceMessageServices?.player.stopAndClearCache()
         voiceMessageServices = nil
     }
 

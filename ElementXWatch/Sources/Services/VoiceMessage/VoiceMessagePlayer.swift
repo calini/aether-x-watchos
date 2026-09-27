@@ -41,6 +41,8 @@ protocol VoiceMessagePlayerProtocol: AnyObject {
     func pause()
     /// Stops, and releases the audio session if playback took it.
     func stop()
+    /// Stops, then deletes every decoded message, since those from encrypted rooms are decrypted: for signing out.
+    func stopAndClearCache()
 }
 
 // sourcery: AutoMockable
@@ -72,6 +74,8 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
     private var current: (id: String, backend: AudioPlaybackBackend, fileURL: URL)?
     /// Bumped by `stop`, so a prepare still running knows it was abandoned.
     private var generation = 0
+    /// Bumped by `stopAndClearCache`, so a prepare still running removes what it stores.
+    private var cacheClearCount = 0
     /// The session is shared with the recorder, so it's only released if playback took it.
     private var isHoldingSession = false
     private var progressTask: Task<Void, Never>?
@@ -151,12 +155,19 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
         }
     }
 
+    func stopAndClearCache() {
+        stop()
+        cacheClearCount += 1
+        cache.removeAll()
+    }
+
     // MARK: - Private
 
     /// The decoded file, from the cache or else downloaded and decoded into it.
     /// Returns `nil` as soon as `stop` or another `play` supersedes `preparingGeneration`, skipping the decode.
     private func prepare(_ source: MediaSourceProxy, generation preparingGeneration: Int) async -> URL? {
         let cache = cache
+        let preparingCacheClearCount = cacheClearCount
         let key = VoiceMessageCache.key(for: source.url)
         if let fileURL = await Task.detached(operation: { cache.cachedFile(for: key) }).value {
             MXLog.info("Voice message found in the cache")
@@ -178,7 +189,12 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
             return nil
         }
         // A superseded prepare leaves eviction to the next store, so it can't remove the message playing now.
-        guard preparingGeneration == generation else { return nil }
+        guard preparingGeneration == generation else {
+            if preparingCacheClearCount != cacheClearCount {
+                await Task.detached { cache.remove(fileURL) }.value
+            }
+            return nil
+        }
         let keptURLs = [fileURL, current?.fileURL].compactMap(\.self)
         await Task.detached { cache.evict(keeping: keptURLs) }.value
         return fileURL
@@ -305,6 +321,21 @@ nonisolated struct VoiceMessageCache: Sendable {
             // Another store of the same message got there first; its file is just as good.
         }
         return fileURL
+    }
+
+    /// Removes every file.
+    func removeAll() {
+        guard FileManager.default.fileExists(atPath: directory.path()) else { return }
+        do {
+            try FileManager.default.removeItem(at: directory)
+            MXLog.info("Cleared the voice message cache")
+        } catch {
+            MXLog.error("Clearing the voice message cache failed")
+        }
+    }
+
+    func remove(_ fileURL: URL) {
+        try? FileManager.default.removeItem(at: fileURL)
     }
 
     /// Removes the least recently used files, other than `keptURLs`, until the cache fits its limit,
