@@ -67,6 +67,8 @@ struct MessageBubble: View {
             if let liveLocation {
                 LocationBubble(content: .live(liveLocation), onTap: onShowLocation, onStop: onStopLiveLocation)
             }
+        case .voice:
+            Text("🎤 \(WatchStrings.voiceMessage)")
         case .redacted:
             Text(WatchStrings.messageDeleted).italic().foregroundStyle(Color.compound.textSecondary)
         case .undecryptable:

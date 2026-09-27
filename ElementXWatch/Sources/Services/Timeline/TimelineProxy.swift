@@ -7,6 +7,7 @@
 //
 
 import Combine
+import Foundation
 import MatrixRustSDK
 
 enum TimelineProxyError: Error, Equatable {
@@ -22,6 +23,8 @@ protocol TimelineProxyProtocol: AnyObject, Sendable {
     func paginateBackwards() async -> Result<Bool, TimelineProxyError>
     func send(message: String, inReplyTo eventID: String?) async -> Result<Void, TimelineProxyError>
     func sendLocation(_ geoURI: GeoURI, description: String?) async -> Result<Void, TimelineProxyError>
+    /// Uploads an Ogg Opus file as a voice message. `waveform` amplitudes are 0…1.
+    func sendVoiceMessage(fileURL: URL, duration: TimeInterval, waveform: [Float]) async -> Result<Void, TimelineProxyError>
     func toggleReaction(_ key: String, to itemID: EventOrTransactionId) async -> Result<Void, TimelineProxyError>
     func retrySend(_ itemID: EventOrTransactionId) async -> Result<Void, TimelineProxyError>
     func markAsRead() async
@@ -100,6 +103,25 @@ final class TimelineProxy: TimelineProxyProtocol {
         } catch {
             // Only the type: the SDK's message could echo the geo URI.
             MXLog.error("Sending a location failed: \(type(of: error))")
+            return .failure(.sdkError(error.localizedDescription))
+        }
+    }
+
+    func sendVoiceMessage(fileURL: URL, duration: TimeInterval, waveform: [Float]) async -> Result<Void, TimelineProxyError> {
+        MXLog.info("Sending a voice message: \(duration) s")
+        let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(UInt64.init)
+        let parameters = UploadParameters(source: .file(filename: fileURL.path(percentEncoded: false)),
+                                          caption: nil, formattedCaption: nil, mentions: nil, inReplyTo: nil, extraContentJson: nil)
+        do {
+            let handle = try timeline.sendVoiceMessage(params: parameters,
+                                                       audioInfo: AudioInfo(duration: duration, size: size, mimetype: "audio/ogg"),
+                                                       waveform: waveform)
+            try await handle.join()
+            MXLog.info("Sent a voice message")
+            return .success(())
+        } catch {
+            // Only the type: the SDK's message could echo the file path.
+            MXLog.error("Sending a voice message failed: \(type(of: error))")
             return .failure(.sdkError(error.localizedDescription))
         }
     }

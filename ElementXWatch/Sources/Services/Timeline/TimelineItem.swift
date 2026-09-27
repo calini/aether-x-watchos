@@ -52,6 +52,7 @@ enum TimelineItemBody: Equatable {
     case image(ImageBody)
     case location(LocationBody)
     case liveLocation(LiveLocationBody)
+    case voice(VoiceBody)
     case redacted
     case undecryptable
     case unsupported(String)
@@ -80,6 +81,13 @@ struct LiveLocationBody: Equatable {
     /// When the share stops being live if no stop event arrives: its start plus its timeout.
     let endDate: Date
     let senderID: String
+}
+
+struct VoiceBody: Equatable {
+    let duration: TimeInterval
+    /// Amplitudes in 0…1.
+    let waveform: [Float]
+    let source: MediaSourceProxy
 }
 
 struct ReplyPreview: Equatable {

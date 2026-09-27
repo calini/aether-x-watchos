@@ -52,6 +52,7 @@ targets:
         WKWatchOnly: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocationWhenInUseUsageDescription: Share your location in chats.
+        NSMicrophoneUsageDescription: Record voice messages in chats.
         UIBackgroundModes: [location]
     settings:
       base:

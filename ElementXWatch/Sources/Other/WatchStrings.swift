@@ -18,6 +18,7 @@ nonisolated enum WatchStrings {
     static let photoAccessibilityLabel = "Photo"
     static let video = "🎥 Video"
     static let audio = "🎵 Audio"
+    static let voiceMessage = "Voice message"
     static let file = "📎 File"
     static let location = "Location"
     static let liveLocation = "Live location"

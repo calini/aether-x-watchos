@@ -57,7 +57,7 @@ enum RoomSummaryPreview {
             case .notice(let content): return content.body
             case .image: return WatchStrings.photo
             case .video: return WatchStrings.video
-            case .audio: return WatchStrings.audio
+            case .audio(let content): return content.voice == nil ? WatchStrings.audio : "🎤 \(WatchStrings.voiceMessage)"
             case .file: return WatchStrings.file
             case .location: return "📍 \(WatchStrings.location)"
             case .gallery: return WatchStrings.gallery

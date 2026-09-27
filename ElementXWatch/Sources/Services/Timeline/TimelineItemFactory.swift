@@ -11,6 +11,9 @@ import MatrixRustSDK
 
 /// Maps SDK timeline items to the watch's display models.
 enum TimelineItemFactory {
+    /// MSC3246 amplitudes run 0…1024 (iOS's `EstimatedWaveform.dataRange`, the SDK's `UnstableAmplitude::MAX`).
+    private static let voiceWaveformMaximum: Float = 1024
+
     static func makeItem(from item: MatrixRustSDK.TimelineItem, ownUserID: String) -> TimelineItem {
         let id = item.uniqueId().id
 
@@ -50,6 +53,8 @@ enum TimelineItemFactory {
                                          aspectRatio: aspectRatio(width: image.info?.width, height: image.info?.height)))
             case .location(let location):
                 return .location(locationBody(from: location))
+            case .audio(let audio) where audio.voice != nil:
+                return .voice(voiceBody(from: audio))
             default:
                 return .unsupported(RoomSummaryPreview.text(for: content) ?? WatchStrings.unsupportedMessage)
             }
@@ -73,6 +78,12 @@ enum TimelineItemFactory {
 
     static func locationBody(from content: LocationContent) -> LocationBody {
         LocationBody(geoURI: GeoURI(string: content.geoUri), description: content.description, body: content.body)
+    }
+
+    static func voiceBody(from content: AudioMessageContent) -> VoiceBody {
+        VoiceBody(duration: content.audio?.duration ?? content.info?.duration ?? 0,
+                  waveform: (content.audio?.waveform ?? []).map { min(Float($0) / voiceWaveformMaximum, 1) },
+                  source: MediaSourceProxy(source: content.source))
     }
 
     static func liveLocationBody(from content: LiveLocationContent, senderID: String) -> LiveLocationBody {

@@ -9,6 +9,101 @@
 
 import Foundation
 
+nonisolated class AudioSessionProxyMock: AudioSessionProxyProtocol, @unchecked Sendable {
+    var recordPermission: MicrophonePermission {
+        get { return underlyingRecordPermission }
+        set(value) { underlyingRecordPermission = value }
+    }
+    nonisolated(unsafe) var underlyingRecordPermission: MicrophonePermission!
+
+    //MARK: - requestRecordPermission
+
+    private let requestRecordPermissionCallsCountLock = NSLock()
+    private nonisolated(unsafe) var requestRecordPermissionUnderlyingCallsCount = 0
+    var requestRecordPermissionCallsCount: Int {
+        get { requestRecordPermissionCallsCountLock.withLock { requestRecordPermissionUnderlyingCallsCount } }
+        set { requestRecordPermissionCallsCountLock.withLock { requestRecordPermissionUnderlyingCallsCount = newValue } }
+    }
+    var requestRecordPermissionCalled: Bool {
+        return requestRecordPermissionCallsCount > 0
+    }
+
+    private let requestRecordPermissionReturnValueLock = NSLock()
+    private nonisolated(unsafe) var requestRecordPermissionUnderlyingReturnValue: Bool!
+    var requestRecordPermissionReturnValue: Bool! {
+        get { requestRecordPermissionReturnValueLock.withLock { requestRecordPermissionUnderlyingReturnValue } }
+        set { requestRecordPermissionReturnValueLock.withLock { requestRecordPermissionUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var requestRecordPermissionClosure: (() async -> Bool)?
+
+    @concurrent func requestRecordPermission() async -> Bool {
+        requestRecordPermissionCallsCountLock.withLock { requestRecordPermissionUnderlyingCallsCount += 1 }
+        if let requestRecordPermissionClosure = requestRecordPermissionClosure {
+            return await requestRecordPermissionClosure()
+        } else {
+            return requestRecordPermissionReturnValue
+        }
+    }
+    //MARK: - activateForRecording
+
+    nonisolated(unsafe) var activateForRecordingThrowableError: Error?
+    private let activateForRecordingCallsCountLock = NSLock()
+    private nonisolated(unsafe) var activateForRecordingUnderlyingCallsCount = 0
+    var activateForRecordingCallsCount: Int {
+        get { activateForRecordingCallsCountLock.withLock { activateForRecordingUnderlyingCallsCount } }
+        set { activateForRecordingCallsCountLock.withLock { activateForRecordingUnderlyingCallsCount = newValue } }
+    }
+    var activateForRecordingCalled: Bool {
+        return activateForRecordingCallsCount > 0
+    }
+    nonisolated(unsafe) var activateForRecordingClosure: (() throws -> Void)?
+
+    func activateForRecording() throws {
+        if let error = activateForRecordingThrowableError {
+            throw error
+        }
+        activateForRecordingCallsCountLock.withLock { activateForRecordingUnderlyingCallsCount += 1 }
+        try activateForRecordingClosure?()
+    }
+    //MARK: - activateForPlayback
+
+    nonisolated(unsafe) var activateForPlaybackThrowableError: Error?
+    private let activateForPlaybackCallsCountLock = NSLock()
+    private nonisolated(unsafe) var activateForPlaybackUnderlyingCallsCount = 0
+    var activateForPlaybackCallsCount: Int {
+        get { activateForPlaybackCallsCountLock.withLock { activateForPlaybackUnderlyingCallsCount } }
+        set { activateForPlaybackCallsCountLock.withLock { activateForPlaybackUnderlyingCallsCount = newValue } }
+    }
+    var activateForPlaybackCalled: Bool {
+        return activateForPlaybackCallsCount > 0
+    }
+    nonisolated(unsafe) var activateForPlaybackClosure: (() throws -> Void)?
+
+    func activateForPlayback() throws {
+        if let error = activateForPlaybackThrowableError {
+            throw error
+        }
+        activateForPlaybackCallsCountLock.withLock { activateForPlaybackUnderlyingCallsCount += 1 }
+        try activateForPlaybackClosure?()
+    }
+    //MARK: - deactivate
+
+    private let deactivateCallsCountLock = NSLock()
+    private nonisolated(unsafe) var deactivateUnderlyingCallsCount = 0
+    var deactivateCallsCount: Int {
+        get { deactivateCallsCountLock.withLock { deactivateUnderlyingCallsCount } }
+        set { deactivateCallsCountLock.withLock { deactivateUnderlyingCallsCount = newValue } }
+    }
+    var deactivateCalled: Bool {
+        return deactivateCallsCount > 0
+    }
+    nonisolated(unsafe) var deactivateClosure: (() -> Void)?
+
+    func deactivate() {
+        deactivateCallsCountLock.withLock { deactivateUnderlyingCallsCount += 1 }
+        deactivateClosure?()
+    }
+}
 nonisolated class AuthenticationServiceMock: AuthenticationServiceProtocol, @unchecked Sendable {
 
     //MARK: - configure
@@ -1407,6 +1502,48 @@ nonisolated class TimelineProxyMock: TimelineProxyProtocol, @unchecked Sendable 
             return await sendLocationDescriptionClosure(geoURI, description)
         } else {
             return sendLocationDescriptionReturnValue
+        }
+    }
+    //MARK: - sendVoiceMessage
+
+    private let sendVoiceMessageFileURLDurationWaveformCallsCountLock = NSLock()
+    private nonisolated(unsafe) var sendVoiceMessageFileURLDurationWaveformUnderlyingCallsCount = 0
+    var sendVoiceMessageFileURLDurationWaveformCallsCount: Int {
+        get { sendVoiceMessageFileURLDurationWaveformCallsCountLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingCallsCount } }
+        set { sendVoiceMessageFileURLDurationWaveformCallsCountLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingCallsCount = newValue } }
+    }
+    var sendVoiceMessageFileURLDurationWaveformCalled: Bool {
+        return sendVoiceMessageFileURLDurationWaveformCallsCount > 0
+    }
+    private let sendVoiceMessageFileURLDurationWaveformReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var sendVoiceMessageFileURLDurationWaveformUnderlyingReceivedArguments: (fileURL: URL, duration: TimeInterval, waveform: [Float])?
+    var sendVoiceMessageFileURLDurationWaveformReceivedArguments: (fileURL: URL, duration: TimeInterval, waveform: [Float])? {
+        get { sendVoiceMessageFileURLDurationWaveformReceivedArgumentsLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingReceivedArguments } }
+        set { sendVoiceMessageFileURLDurationWaveformReceivedArgumentsLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingReceivedArguments = newValue } }
+    }
+    private let sendVoiceMessageFileURLDurationWaveformReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var sendVoiceMessageFileURLDurationWaveformUnderlyingReceivedInvocations: [(fileURL: URL, duration: TimeInterval, waveform: [Float])] = []
+    var sendVoiceMessageFileURLDurationWaveformReceivedInvocations: [(fileURL: URL, duration: TimeInterval, waveform: [Float])] {
+        get { sendVoiceMessageFileURLDurationWaveformReceivedInvocationsLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingReceivedInvocations } }
+        set { sendVoiceMessageFileURLDurationWaveformReceivedInvocationsLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingReceivedInvocations = newValue } }
+    }
+
+    private let sendVoiceMessageFileURLDurationWaveformReturnValueLock = NSLock()
+    private nonisolated(unsafe) var sendVoiceMessageFileURLDurationWaveformUnderlyingReturnValue: Result<Void, TimelineProxyError>!
+    var sendVoiceMessageFileURLDurationWaveformReturnValue: Result<Void, TimelineProxyError>! {
+        get { sendVoiceMessageFileURLDurationWaveformReturnValueLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingReturnValue } }
+        set { sendVoiceMessageFileURLDurationWaveformReturnValueLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var sendVoiceMessageFileURLDurationWaveformClosure: ((URL, TimeInterval, [Float]) async -> Result<Void, TimelineProxyError>)?
+
+    @concurrent func sendVoiceMessage(fileURL: URL, duration: TimeInterval, waveform: [Float]) async -> Result<Void, TimelineProxyError> {
+        sendVoiceMessageFileURLDurationWaveformCallsCountLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingCallsCount += 1 }
+        sendVoiceMessageFileURLDurationWaveformReceivedArguments = (fileURL: fileURL, duration: duration, waveform: waveform)
+        sendVoiceMessageFileURLDurationWaveformReceivedInvocationsLock.withLock { sendVoiceMessageFileURLDurationWaveformUnderlyingReceivedInvocations.append((fileURL: fileURL, duration: duration, waveform: waveform)) }
+        if let sendVoiceMessageFileURLDurationWaveformClosure = sendVoiceMessageFileURLDurationWaveformClosure {
+            return await sendVoiceMessageFileURLDurationWaveformClosure(fileURL, duration, waveform)
+        } else {
+            return sendVoiceMessageFileURLDurationWaveformReturnValue
         }
     }
     //MARK: - toggleReaction
