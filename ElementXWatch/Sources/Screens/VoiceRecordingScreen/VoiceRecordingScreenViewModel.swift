@@ -24,8 +24,6 @@ final class VoiceRecordingScreenViewModel: VoiceRecordingScreenViewModelType, Vo
     private var encoded: EncodedVoiceMessage?
     /// The encoder or the SDK is reading the files, so they can't be deleted yet.
     private var areFilesInUse = false
-    /// The first play decodes the file, so a second tap meanwhile mustn't start another.
-    private var isStartingPlayback = false
 
     var actionsPublisher: AnyPublisher<VoiceRecordingScreenViewModelAction, Never> {
         actionsSubject.eraseToAnyPublisher()
@@ -154,11 +152,12 @@ final class VoiceRecordingScreenViewModel: VoiceRecordingScreenViewModelType, Vo
             previewPlayer.pause()
             return
         }
-        guard !isStartingPlayback else { return }
-        isStartingPlayback = true
+        // The first play decodes the file, so a second tap meanwhile mustn't start another.
+        guard !state.isStartingPlayback else { return }
+        state.isStartingPlayback = true
         Task {
             let result = await previewPlayer.play(fileURL: message.fileURL)
-            isStartingPlayback = false
+            state.isStartingPlayback = false
             if case .failure = result, !isFinished {
                 MXLog.error("Playing the voice message preview failed")
             }

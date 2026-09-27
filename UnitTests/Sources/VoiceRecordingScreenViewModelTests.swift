@@ -149,6 +149,22 @@ struct VoiceRecordingScreenViewModelTests {
     }
 
     @Test
+    func firstPlayShowsASpinnerWhileItDecodes() async throws {
+        let harness = try await Harness.reviewing()
+        let gate = AsyncGate()
+        harness.player.playFileURLClosure = { _ in
+            await gate.wait()
+            return .success(())
+        }
+
+        harness.send(.togglePlayback)
+
+        #expect(harness.viewState.isStartingPlayback)
+        await gate.open()
+        try await waitUntil { !harness.viewState.isStartingPlayback }
+    }
+
+    @Test
     func sendSucceedsAndFinishes() async throws {
         let harness = try await Harness.reviewing()
         let gate = AsyncGate()

@@ -15,6 +15,11 @@ struct VoiceRecordingScreen: View {
         context.viewState
     }
 
+    private var isShowingError: Binding<Bool> {
+        Binding(get: { context.viewState.bindings.errorMessage != nil },
+                set: { if !$0 { context.errorMessage = nil } })
+    }
+
     var body: some View {
         content
             .navigationTitle(WatchStrings.voiceMessage)
@@ -82,10 +87,14 @@ struct VoiceRecordingScreen: View {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Button { context.send(viewAction: .togglePlayback) } label: {
-                        Image(compound: viewState.isPlaying ? \.pauseSolid : \.playSolid)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 16, height: 16)
+                        if viewState.isStartingPlayback {
+                            ProgressView()
+                        } else {
+                            Image(compound: viewState.isPlaying ? \.pauseSolid : \.playSolid)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                        }
                     }
                     .buttonStyle(CircleGlassButtonStyle(size: 36))
                     .accessibilityLabel(viewState.isPlaying ? WatchStrings.pause : WatchStrings.play)
@@ -114,11 +123,6 @@ struct VoiceRecordingScreen: View {
                 .foregroundStyle(Color.compound.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var isShowingError: Binding<Bool> {
-        Binding(get: { context.viewState.bindings.errorMessage != nil },
-                set: { if !$0 { context.errorMessage = nil } })
     }
 }
 
@@ -171,6 +175,7 @@ struct VoiceRecordingScreen_Previews: PreviewProvider {
     static let preparing = makeViewModel(recorderState: .stopped(recorded), encodes: false)
     static let review = makeViewModel(recorderState: .stopped(recorded))
     static let playing = makeViewModel(recorderState: .stopped(recorded), playerState: .playing(progress: 0.4))
+    static let decoding = makeDecodingViewModel()
     static let sending = makeSendingViewModel(sends: nil)
     static let sendFailed = makeSendingViewModel(sends: .failure(.sdkError("offline")))
 
@@ -191,6 +196,8 @@ struct VoiceRecordingScreen_Previews: PreviewProvider {
             .previewDisplayName("Preparing")
         screen(review)
             .previewDisplayName("Review")
+        screen(decoding)
+            .previewDisplayName("Review decoding")
         screen(playing)
             .previewDisplayName("Review playing")
         screen(sending)
@@ -206,10 +213,12 @@ struct VoiceRecordingScreen_Previews: PreviewProvider {
     /// - Parameters:
     ///   - start: The recorder's start result, or `nil` to never finish starting.
     ///   - sends: The send result, or `nil` to never finish sending.
+    ///   - plays: Whether a play finishes decoding.
     static func makeViewModel(recorderState: VoiceRecorderState,
                               start: Result<Void, VoiceRecorderError>? = .success(()),
                               encodes: Bool = true,
                               sends: Result<Void, TimelineProxyError>? = .success(()),
+                              plays: Bool = true,
                               playerState: VoiceMessagePreviewPlayerState = .stopped) -> VoiceRecordingScreenViewModel {
         let recorder = VoiceMessageRecorderMock()
         recorder.state = recorderState
@@ -221,7 +230,7 @@ struct VoiceRecordingScreen_Previews: PreviewProvider {
 
         let player = VoiceMessagePreviewPlayerMock()
         player.statePublisher = Just(playerState).eraseToAnyPublisher()
-        player.playFileURLReturnValue = .success(())
+        player.playFileURLClosure = { _ in plays ? .success(()) : await never(.success(())) }
 
         return VoiceRecordingScreenViewModel(recorder: recorder,
                                              encode: { _ in encodes ? .success(message) : await never(.failure(.encodingFailed)) },
@@ -238,6 +247,16 @@ struct VoiceRecordingScreen_Previews: PreviewProvider {
         Task {
             await Task.yield()
             viewModel.context.send(viewAction: .send)
+        }
+        return viewModel
+    }
+
+    /// Taps ▶︎ once the review is up, and the first play never finishes decoding.
+    static func makeDecodingViewModel() -> VoiceRecordingScreenViewModel {
+        let viewModel = makeViewModel(recorderState: .stopped(recorded), plays: false)
+        Task {
+            await Task.yield()
+            viewModel.context.send(viewAction: .togglePlayback)
         }
         return viewModel
     }

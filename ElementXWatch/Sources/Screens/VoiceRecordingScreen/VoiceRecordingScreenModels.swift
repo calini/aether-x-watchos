@@ -21,6 +21,8 @@ enum VoiceRecordingStep: Equatable {
 struct VoiceRecordingScreenViewState: BindableState {
     var step: VoiceRecordingStep = .starting
     var isPlaying = false
+    /// The first play decodes the file first.
+    var isStartingPlayback = false
     /// In 0…1.
     var playbackProgress: Double = 0
     var bindings = VoiceRecordingScreenBindings()
