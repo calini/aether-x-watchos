@@ -6,6 +6,7 @@
 //
 
 @testable import ElementXWatch
+import Foundation
 import MatrixRustSDK
 import Testing
 
@@ -29,6 +30,15 @@ struct TimelineProxyTests {
         let result = await TimelineProxy.resend(sendHandle) { }
 
         #expect(throws: TimelineProxyError.self) { try result.get() }
+    }
+
+    @Test
+    func voiceMessagesAreSentWithAFixedName() {
+        let bytes = Data([0x4F, 0x67, 0x67, 0x53])
+
+        let parameters = TimelineProxy.voiceMessageUploadParameters(bytes: bytes)
+
+        #expect(parameters.source == .data(bytes: bytes, filename: "voice-message.ogg"))
     }
 }
 

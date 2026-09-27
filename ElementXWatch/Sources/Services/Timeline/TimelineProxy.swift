@@ -32,6 +32,8 @@ protocol TimelineProxyProtocol: AnyObject, Sendable {
 
 final class TimelineProxy: TimelineProxyProtocol {
     private static let paginationSize: UInt16 = 20
+    /// The name every voice message is sent with, as Element X iOS does; it becomes the event's body.
+    static let voiceMessageFilename = "voice-message.ogg"
 
     private let timeline: Timeline
     private let ownUserID: String
@@ -109,12 +111,11 @@ final class TimelineProxy: TimelineProxyProtocol {
 
     func sendVoiceMessage(fileURL: URL, duration: TimeInterval, waveform: [Float]) async -> Result<Void, TimelineProxyError> {
         MXLog.info("Sending a voice message: \(duration) s")
-        let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(UInt64.init)
-        let parameters = UploadParameters(source: .file(filename: fileURL.path(percentEncoded: false)),
-                                          caption: nil, formattedCaption: nil, mentions: nil, inReplyTo: nil, extraContentJson: nil)
         do {
-            let handle = try timeline.sendVoiceMessage(params: parameters,
-                                                       audioInfo: AudioInfo(duration: duration, size: size, mimetype: "audio/ogg"),
+            // Sent from memory, so the event gets a fixed name rather than the file's; the SDK holds the bytes from here on.
+            let bytes = try await Task.detached { try Data(contentsOf: fileURL) }.value
+            let handle = try timeline.sendVoiceMessage(params: Self.voiceMessageUploadParameters(bytes: bytes),
+                                                       audioInfo: AudioInfo(duration: duration, size: UInt64(bytes.count), mimetype: "audio/ogg"),
                                                        waveform: waveform)
             try await handle.join()
             MXLog.info("Sent a voice message")
@@ -152,6 +153,11 @@ final class TimelineProxy: TimelineProxyProtocol {
         } catch {
             MXLog.error("Marking as read failed: \(error)")
         }
+    }
+
+    static func voiceMessageUploadParameters(bytes: Data) -> UploadParameters {
+        UploadParameters(source: .data(bytes: bytes, filename: voiceMessageFilename),
+                         caption: nil, formattedCaption: nil, mentions: nil, inReplyTo: nil, extraContentJson: nil)
     }
 
     /// Re-enables the room's send queue before unwedging, otherwise the retried echo stays "Sending…" forever.
