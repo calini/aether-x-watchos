@@ -72,6 +72,12 @@ struct SettingsScreen_Previews: PreviewProvider {
         return viewModel
     }
 
+    static var checkingAudioSupport: SettingsScreenViewModel {
+        let viewModel = SettingsScreenViewModel(clientProxy: ClientProxyMock.preview)
+        viewModel.state.audioSupport = .checking
+        return viewModel
+    }
+
     static var audioSupported: SettingsScreenViewModel {
         let viewModel = SettingsScreenViewModel(clientProxy: ClientProxyMock.preview)
         viewModel.state.audioSupport = .supported
@@ -91,6 +97,8 @@ struct SettingsScreen_Previews: PreviewProvider {
             .previewDisplayName("Unverified with verify row")
         NavigationStack { SettingsScreen(context: checkingVerification.context) }
             .previewDisplayName("Checking verification")
+        NavigationStack { SettingsScreen(context: checkingAudioSupport.context) }
+            .previewDisplayName("Checking audio support")
         NavigationStack { SettingsScreen(context: audioSupported.context) }
             .previewDisplayName("Opus supported")
         NavigationStack { SettingsScreen(context: audioUnsupported.context) }
