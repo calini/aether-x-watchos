@@ -55,6 +55,45 @@ struct VoiceMessageDecoderTests {
     }
 
     @Test
+    func stopsAtTheMaximumDuration() throws {
+        let recording = try makeTone(seconds: 2, channels: 1)
+        let message = try VoiceMessageEncoder.encode(recordingAt: recording)
+        let output = temporaryURL()
+        defer { removeFiles(recording, message.fileURL, output) }
+
+        let duration = try VoiceMessageDecoder.decode(oggData: Data(contentsOf: message.fileURL), to: output, maximumDuration: 0.5)
+
+        #expect(duration == 0.5)
+        #expect(try AVAudioFile(forReading: output).length == 24000)
+    }
+
+    @Test
+    func aHugeGranuleIsCutAtTheMaximumDuration() throws {
+        // A sender can claim any length: here, a day of audio made of the same packets over and over.
+        let recording = try makeTone(seconds: 1, channels: 1)
+        let message = try VoiceMessageEncoder.encode(recordingAt: recording)
+        let output = temporaryURL()
+        defer { removeFiles(recording, message.fileURL, output) }
+        let packets = try OggOpusReader.read(Data(contentsOf: message.fileURL)).packets
+        let ogg = OggOpusWriter.write(packets: Array(repeating: packets, count: 5).flatMap(\.self), preSkip: 312, frameCount: 86400 * 48000)
+
+        let duration = try VoiceMessageDecoder.decode(oggData: ogg, to: output, maximumDuration: 2)
+
+        #expect(duration == 2)
+        #expect(try AVAudioFile(forReading: output).length == 96000)
+    }
+
+    @Test
+    func rejectsAFileOverTheSizeLimit() {
+        let output = temporaryURL()
+        defer { removeFiles(output) }
+
+        #expect(throws: OpusCodecError.decodingFailed) {
+            try VoiceMessageDecoder.decode(oggData: Data(count: VoiceMessageDecoder.maximumOggBytes + 1), to: output)
+        }
+    }
+
+    @Test
     func rejectsDataThatIsNotOggOpus() {
         let output = temporaryURL()
         defer { removeFiles(output) }

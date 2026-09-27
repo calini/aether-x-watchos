@@ -168,6 +168,10 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
             return nil
         }
         guard preparingGeneration == generation else { return nil }
+        guard oggData.count <= VoiceMessageDecoder.maximumOggBytes else {
+            MXLog.error("The voice message is too large to play: \(oggData.count) bytes")
+            return nil
+        }
 
         guard let fileURL = await Task.detached(operation: { try? cache.store(oggData, for: key) }).value else {
             MXLog.error("Decoding the voice message failed")
@@ -257,6 +261,8 @@ final class VoiceMessagePlayer: VoiceMessagePlayerProtocol {
 /// Decoded voice messages, named by a hash of their media URL and trimmed to `limitBytes`, least recently used first.
 /// Blocking file work: call off the main actor.
 nonisolated struct VoiceMessageCache: Sendable {
+    private static let partialFileLifetime: TimeInterval = 5 * 60
+
     let directory: URL
     let limitBytes: Int
 
@@ -289,17 +295,26 @@ nonisolated struct VoiceMessageCache: Sendable {
         return fileURL
     }
 
-    /// Removes the least recently used files, other than `keptURLs`, until the cache fits its limit.
-    func evict(keeping keptURLs: [URL]) {
+    /// Removes the least recently used files, other than `keptURLs`, until the cache fits its limit,
+    /// and what decodes cut short by the app being killed left behind.
+    func evict(keeping keptURLs: [URL], now: Date = .now) {
         let keptNames = Set(keptURLs.map(\.lastPathComponent))
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
         guard let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: Array(keys)) else { return }
-        let files = urls
-            .filter { $0.pathExtension == "caf" }
-            .map { url in
-                let values = try? url.resourceValues(forKeys: keys)
-                return (url: url, date: values?.contentModificationDate ?? .distantPast, size: values?.fileSize ?? 0)
-            }
+        let allFiles = urls.map { url in
+            let values = try? url.resourceValues(forKeys: keys)
+            return (url: url, date: values?.contentModificationDate ?? .distantPast, size: values?.fileSize ?? 0)
+        }
+
+        // A decode still running keeps writing to its file, so only files left untouched for a while are stale.
+        let stalePartials = allFiles.filter { $0.url.pathExtension == "partial" && now.timeIntervalSince($0.date) > Self.partialFileLifetime }
+        stalePartials.forEach { try? FileManager.default.removeItem(at: $0.url) }
+        if !stalePartials.isEmpty {
+            MXLog.info("Removed \(stalePartials.count) unfinished voice message decodes")
+        }
+
+        let files = allFiles
+            .filter { $0.url.pathExtension == "caf" }
             .sorted { $0.date < $1.date }
 
         var totalSize = files.reduce(0) { $0 + $1.size }

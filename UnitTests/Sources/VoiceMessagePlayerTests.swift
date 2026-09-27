@@ -249,6 +249,38 @@ struct VoiceMessagePlayerTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: harness.cacheDirectory.path()).count == 1)
     }
 
+    @Test
+    func aDownloadOverTheSizeLimitFails() async throws {
+        let harness = try Harness()
+        defer { harness.removeFiles() }
+        let ogg = harness.ogg
+        harness.content = { _ in ogg + Data(count: VoiceMessageDecoder.maximumOggBytes) }
+
+        try await harness.player.play(id: "$a", source: harness.source("a"))
+
+        #expect(harness.player.state == .failed(id: "$a"))
+        #expect(harness.cachedFiles.isEmpty)
+        #expect(!harness.audioSession.activateForPlaybackCalled)
+    }
+
+    @Test
+    func evictionRemovesStaleUnfinishedDecodes() throws {
+        let harness = try Harness()
+        defer { harness.removeFiles() }
+        let cache = VoiceMessageCache(directory: harness.cacheDirectory, limitBytes: 20_000_000)
+        try FileManager.default.createDirectory(at: harness.cacheDirectory, withIntermediateDirectories: true)
+        let stale = harness.cacheDirectory.appending(path: "stale.partial")
+        let running = harness.cacheDirectory.appending(path: "running.partial")
+        try Data([1]).write(to: stale)
+        try Data([1]).write(to: running)
+        try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-600)], ofItemAtPath: stale.path())
+
+        cache.evict(keeping: [])
+
+        #expect(!FileManager.default.fileExists(atPath: stale.path()))
+        #expect(FileManager.default.fileExists(atPath: running.path()))
+    }
+
     // MARK: - Helpers
 
     /// Holds a download until `open()`.
