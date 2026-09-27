@@ -24,6 +24,8 @@ struct VoiceMessageDecoderTests {
         let file = try AVAudioFile(forReading: output)
         #expect(file.length == 72000)
         #expect(file.processingFormat == OpusCodec.pcmFormat)
+        // Stored as 16-bit integers, half the size of the processing format, since players cache these files.
+        #expect(file.fileFormat.commonFormat == .pcmFormatInt16)
     }
 
     @Test

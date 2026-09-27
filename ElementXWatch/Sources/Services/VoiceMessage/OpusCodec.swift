@@ -33,6 +33,17 @@ nonisolated enum OpusCodec {
         AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
     }
 
+    /// Decoded files hold 16-bit samples: half the size of Float32, and still beyond what Opus at 24 kbps keeps.
+    static var decodedFileSettings: [String: Any] {
+        [AVFormatIDKey: kAudioFormatLinearPCM,
+         AVSampleRateKey: sampleRate,
+         AVNumberOfChannelsKey: 1,
+         AVLinearPCMBitDepthKey: 16,
+         AVLinearPCMIsFloatKey: false,
+         AVLinearPCMIsBigEndianKey: false,
+         AVLinearPCMIsNonInterleaved: false]
+    }
+
     /// Encodes a PCM file (any format; converted to 48 kHz mono Float32) in chunks of `chunkFrames`.
     /// `onChunkRead` observes each chunk read from the source file.
     static func encode(fileAt url: URL,
@@ -77,7 +88,7 @@ nonisolated enum OpusCodec {
         return OpusEncodedAudio(packets: packets, preSkip: preSkip(of: encoder), frameCount: frameCount)
     }
 
-    /// Decodes packets to a 48 kHz mono PCM CAF at `outputURL`, dropping `preSkip` frames, in chunks.
+    /// Decodes packets to a 48 kHz mono 16-bit PCM CAF at `outputURL` (read back as `pcmFormat`), dropping `preSkip` frames, in chunks.
     /// A stereo stream (`channelCount` 2) is downmixed. `frameLimit` trims the output to the stream's real length.
     /// Returns the duration written.
     static func decode(packets: [Data],
@@ -92,7 +103,7 @@ nonisolated enum OpusCodec {
 
         let file: AVAudioFile
         do {
-            file = try AVAudioFile(forWriting: outputURL, settings: pcmFormat.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+            file = try AVAudioFile(forWriting: outputURL, settings: decodedFileSettings, commonFormat: .pcmFormatFloat32, interleaved: false)
         } catch {
             throw .decodingFailed
         }

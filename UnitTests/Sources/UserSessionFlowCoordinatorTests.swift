@@ -15,7 +15,7 @@ struct UserSessionFlowCoordinatorTests {
     func passwordSignInPresentsVerification() async throws {
         let setup = Setup()
         setup.clientProxy.sessionVerificationControllerReturnValue = SessionVerificationControllerProxyMock.idle
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, showsVerificationOnStart: true)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices, showsVerificationOnStart: true)
 
         coordinator.start()
 
@@ -25,7 +25,7 @@ struct UserSessionFlowCoordinatorTests {
     @Test
     func restoredSessionsDoNotPresentVerification() {
         let setup = Setup()
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices)
 
         coordinator.start()
 
@@ -36,7 +36,7 @@ struct UserSessionFlowCoordinatorTests {
     func dismissingVerificationHidesIt() async throws {
         let setup = Setup()
         setup.clientProxy.sessionVerificationControllerReturnValue = SessionVerificationControllerProxyMock.idle
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices)
         coordinator.start()
 
         coordinator.presentVerification()
@@ -49,7 +49,7 @@ struct UserSessionFlowCoordinatorTests {
     @Test
     func presentingTwicePresentsOnce() async throws {
         let setup = Setup()
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, showsVerificationOnStart: true)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices, showsVerificationOnStart: true)
         coordinator.start()
         try await waitUntil { coordinator.isPresentingVerification }
         let context = coordinator.verificationScreen
@@ -66,7 +66,7 @@ struct UserSessionFlowCoordinatorTests {
         let setup = Setup()
         let controllerProxy = SessionVerificationControllerProxyMock.idle
         setup.clientProxy.sessionVerificationControllerReturnValue = nil
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, showsVerificationOnStart: true)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices, showsVerificationOnStart: true)
         coordinator.start()
         try await waitUntil { coordinator.isPresentingVerification }
         #expect(setup.clientProxy.sessionVerificationControllerCallsCount == 0)
@@ -81,7 +81,7 @@ struct UserSessionFlowCoordinatorTests {
     func swipingAwayWhileWaitingForTheControllerCancels() async throws {
         let setup = Setup()
         setup.clientProxy.sessionVerificationControllerReturnValue = nil
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, showsVerificationOnStart: true)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices, showsVerificationOnStart: true)
         coordinator.start()
         try await waitUntil { coordinator.isPresentingVerification }
         let context = coordinator.verificationScreen
@@ -99,7 +99,7 @@ struct UserSessionFlowCoordinatorTests {
         let setup = Setup()
         let controllerProxy = SessionVerificationControllerProxyMock.idle
         setup.clientProxy.sessionVerificationControllerReturnValue = controllerProxy
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, showsVerificationOnStart: true)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices, showsVerificationOnStart: true)
         coordinator.start()
         try await waitUntil { coordinator.isPresentingVerification }
         coordinator.verificationScreen?.send(viewAction: .start)
@@ -116,7 +116,7 @@ struct UserSessionFlowCoordinatorTests {
         let setup = Setup()
         let controllerProxy = SessionVerificationControllerProxyMock.idle
         setup.clientProxy.sessionVerificationControllerReturnValue = controllerProxy
-        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, showsVerificationOnStart: true)
+        let coordinator = UserSessionFlowCoordinator(clientProxy: setup.clientProxy, locationServices: setup.locationServices, voiceMessageServices: setup.voiceMessageServices, showsVerificationOnStart: true)
         coordinator.start()
         try await waitUntil { coordinator.isPresentingVerification }
         let context = coordinator.verificationScreen

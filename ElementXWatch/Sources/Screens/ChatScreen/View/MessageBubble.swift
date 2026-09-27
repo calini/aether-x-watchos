@@ -17,6 +17,9 @@ struct MessageBubble: View {
     let onShowLocation: () -> Void
     /// Set on the user's own running live share, to offer Stop.
     var onStopLiveLocation: (() -> Void)?
+    /// This message's playback, for a voice message (`ChatScreenViewState.voicePlayback(for:)`).
+    var voicePlayback = VoicePlaybackState.idle
+    var onToggleVoicePlayback: () -> Void = { }
 
     var body: some View {
         VStack(alignment: item.isOwn ? .trailing : .leading, spacing: 2) {
@@ -67,8 +70,8 @@ struct MessageBubble: View {
             if let liveLocation {
                 LocationBubble(content: .live(liveLocation), onTap: onShowLocation, onStop: onStopLiveLocation)
             }
-        case .voice:
-            Text("🎤 \(WatchStrings.voiceMessage)")
+        case .voice(let voice):
+            VoiceMessageBubble(voice: voice, playback: voicePlayback, onTogglePlayback: onToggleVoicePlayback)
         case .redacted:
             Text(WatchStrings.messageDeleted).italic().foregroundStyle(Color.compound.textSecondary)
         case .undecryptable:

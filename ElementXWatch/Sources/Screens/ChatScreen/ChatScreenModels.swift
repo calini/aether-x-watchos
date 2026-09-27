@@ -26,6 +26,8 @@ struct ChatScreenViewState: BindableState {
     var liveLocations: [LiveLocationSummary]?
     /// This device's live share in this room, if one is running.
     var liveShare: LiveShareBanner?
+    /// The session player's state; only the message it names shows it (`voicePlayback(for:)`).
+    var voicePlayback = VoicePlaybackState.idle
     /// Refreshed on a periodic tick, so a share whose sender vanished without stopping it still reads as ended.
     var now: Date
     var bindings = ChatScreenBindings()
@@ -45,6 +47,10 @@ struct ChatScreenViewState: BindableState {
                                        geoURI: share?.lastGeoURI ?? body.lastGeoURI,
                                        lastUpdate: share?.lastUpdate ?? body.lastUpdate,
                                        endDate: endDate)
+    }
+
+    func voicePlayback(for item: EventItem) -> VoicePlaybackState {
+        voicePlayback.id == item.id ? voicePlayback : .idle
     }
 
     /// Own running live bubbles offer Stop while this device shares in this room.
@@ -104,6 +110,7 @@ struct ChatScreenBindings {
 
 enum ChatScreenViewAction {
     case appear
+    case disappear
     case paginateBackwards
     case send(String)
     case showActions(EventItem)
@@ -117,4 +124,5 @@ enum ChatScreenViewAction {
     case cancelDraft
     case dismissError
     case stopLiveLocation
+    case toggleVoicePlayback(EventItem)
 }

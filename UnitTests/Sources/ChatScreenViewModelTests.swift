@@ -403,6 +403,80 @@ struct ChatScreenViewModelTests {
         #expect(!viewModel.context.viewState.canStopLiveLocation(from: liveItem(isLive: false, isOwn: true)), "Not an ended share.")
     }
 
+    @Test
+    func togglingAVoiceMessagePlaysItThenPausesIt() async throws {
+        let playback = CurrentValueSubject<VoicePlaybackState, Never>(.idle)
+        let player = makeVoicePlayer(playback)
+        let (viewModel, _, _) = makeViewModel(voiceMessagePlayer: player)
+        let item = try voiceItem("$voice")
+
+        viewModel.context.send(viewAction: .toggleVoicePlayback(item))
+
+        try await waitUntil { player.playIdSourceCallsCount == 1 }
+        #expect(player.playIdSourceReceivedArguments?.id == item.id)
+        #expect(player.playIdSourceReceivedArguments?.source.url == "mxc://example.org/voice")
+
+        playback.send(.playing(id: item.id, progress: 0.5, elapsed: 1))
+        try await waitUntil { viewModel.context.viewState.voicePlayback(for: item) == .playing(id: item.id, progress: 0.5, elapsed: 1) }
+        viewModel.context.send(viewAction: .toggleVoicePlayback(item))
+
+        #expect(player.pauseCallsCount == 1)
+        #expect(player.playIdSourceCallsCount == 1)
+    }
+
+    @Test
+    func togglingAPausedOrFailedVoiceMessagePlaysIt() async throws {
+        let playback = CurrentValueSubject<VoicePlaybackState, Never>(.idle)
+        let player = makeVoicePlayer(playback)
+        let (viewModel, _, _) = makeViewModel(voiceMessagePlayer: player)
+        let item = try voiceItem("$voice")
+
+        playback.send(.paused(id: item.id, progress: 0.5, elapsed: 1))
+        try await waitUntil { viewModel.context.viewState.voicePlayback(for: item) != .idle }
+        viewModel.context.send(viewAction: .toggleVoicePlayback(item))
+        try await waitUntil { player.playIdSourceCallsCount == 1 }
+
+        playback.send(.failed(id: item.id))
+        try await waitUntil { viewModel.context.viewState.voicePlayback(for: item) == .failed(id: item.id) }
+        viewModel.context.send(viewAction: .toggleVoicePlayback(item))
+        try await waitUntil { player.playIdSourceCallsCount == 2 }
+        #expect(player.pauseCallsCount == 0)
+    }
+
+    @Test
+    func voicePlaybackOnlyShowsOnItsOwnMessage() async throws {
+        let playback = CurrentValueSubject<VoicePlaybackState, Never>(.idle)
+        let (viewModel, _, _) = makeViewModel(voiceMessagePlayer: makeVoicePlayer(playback))
+        let playing = try voiceItem("$a")
+        let other = try voiceItem("$b")
+
+        playback.send(.preparing(id: playing.id))
+
+        try await waitUntil { viewModel.context.viewState.voicePlayback(for: playing) == .preparing(id: playing.id) }
+        #expect(viewModel.context.viewState.voicePlayback(for: other) == .idle)
+    }
+
+    @Test
+    func leavingTheChatStopsPlayback() {
+        let player = makeVoicePlayer(.init(.idle))
+        let (viewModel, _, _) = makeViewModel(voiceMessagePlayer: player)
+
+        viewModel.context.send(viewAction: .disappear)
+
+        #expect(player.stopCallsCount == 1)
+    }
+
+    @Test
+    func openingAttachmentsStopsPlaybackSoRecordingHasTheAudioSession() {
+        let player = makeVoicePlayer(.init(.idle))
+        let (viewModel, _, _) = makeViewModel(voiceMessagePlayer: player)
+
+        viewModel.context.send(viewAction: .showAttachments)
+
+        #expect(player.stopCallsCount == 1)
+        #expect(viewModel.context.viewState.bindings.attachments != nil)
+    }
+
     // MARK: - Helpers
 
     private static let roomID = "!room:example.org"
@@ -426,9 +500,22 @@ struct ChatScreenViewModelTests {
                             lastGeoURI: geoURI, lastUpdate: Self.start)
     }
 
+    private func voiceItem(_ eventID: String) throws -> EventItem {
+        let source = try MediaSourceProxy(source: MediaSource.fromUrl(url: "mxc://example.org/\(eventID.dropFirst())"))
+        return EventItem.fixture(eventID: eventID, body: .voice(VoiceBody(duration: 12, waveform: [], source: source)))
+    }
+
+    private func makeVoicePlayer(_ playback: CurrentValueSubject<VoicePlaybackState, Never>) -> VoiceMessagePlayerMock {
+        let player = VoiceMessagePlayerMock()
+        player.state = playback.value
+        player.statePublisher = playback.eraseToAnyPublisher()
+        return player
+    }
+
     private func makeViewModel(liveLocations: CurrentValueSubject<[LiveLocationSummary], Never>? = nil,
                                liveState: CurrentValueSubject<LiveLocationState, Never> = .init(.idle),
                                liveLocationService: LiveLocationServiceMock = LiveLocationServiceMock(),
+                               voiceMessagePlayer: VoiceMessagePlayerMock? = nil,
                                clock: ExpiryClock = ExpiryClock())
         -> (ChatScreenViewModel, TimelineProxyMock, PassthroughSubject<[ElementXWatch.TimelineItem], Never>) {
         let items = PassthroughSubject<[ElementXWatch.TimelineItem], Never>()
@@ -444,6 +531,7 @@ struct ChatScreenViewModelTests {
         liveLocationService.statePublisher = liveState.eraseToAnyPublisher()
         let viewModel = ChatScreenViewModel(roomID: Self.roomID, roomName: "Alice", isDirect: true, timelineProxy: proxy,
                                             roomLocationProxy: roomLocationProxy, liveLocationService: liveLocationService,
+                                            voiceMessagePlayer: voiceMessagePlayer ?? makeVoicePlayer(.init(.idle)),
                                             now: { clock.now }, ticks: clock.ticks)
         return (viewModel, proxy, items)
     }

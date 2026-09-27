@@ -24,9 +24,12 @@ import SwiftUI
     @ObservationIgnored private let authenticationService: AuthenticationServiceProtocol
     @ObservationIgnored private let qrLoginService: QRLoginServiceProtocol
     @ObservationIgnored private let makeLocationServices: @MainActor (ClientProxyProtocol) -> LocationServices
+    @ObservationIgnored private let makeVoiceMessageServices: @MainActor (ClientProxyProtocol) -> VoiceMessageServices
     @ObservationIgnored private var clientProxy: ClientProxyProtocol?
     /// Owned here rather than by the session's flow: built before sync starts, and stopped before logging out.
     @ObservationIgnored private var locationServices: LocationServices?
+    /// Owned here like `locationServices`, so playback stops before logging out.
+    @ObservationIgnored private var voiceMessageServices: VoiceMessageServices?
     @ObservationIgnored private var liveLocationRestoreCancellable: AnyCancellable?
     @ObservationIgnored private var liveLocationRestoreTask: Task<Void, Never>?
     @ObservationIgnored private var liveLocationStateCancellable: AnyCancellable?
@@ -58,12 +61,14 @@ import SwiftUI
          restorer: UserSessionRestorerProtocol,
          authenticationService: AuthenticationServiceProtocol,
          qrLoginService: QRLoginServiceProtocol,
-         makeLocationServices: @escaping @MainActor (ClientProxyProtocol) -> LocationServices = LocationServices.live(for:)) {
+         makeLocationServices: @escaping @MainActor (ClientProxyProtocol) -> LocationServices = LocationServices.live(for:),
+         makeVoiceMessageServices: @escaping @MainActor (ClientProxyProtocol) -> VoiceMessageServices = VoiceMessageServices.live(for:)) {
         self.sessionStore = sessionStore
         self.restorer = restorer
         self.authenticationService = authenticationService
         self.qrLoginService = qrLoginService
         self.makeLocationServices = makeLocationServices
+        self.makeVoiceMessageServices = makeVoiceMessageServices
     }
 
     func start() async {
@@ -93,6 +98,7 @@ import SwiftUI
         MXLog.info("Signing out")
         // Its stop needs the session, and a share left running would keep sending from a signed-out watch.
         await stopLiveLocation().value
+        stopVoicePlayback()
         let oldClientProxy = clientProxy
         await teardownSync(of: oldClientProxy, wasRunning: isSyncRunning).value
         await oldClientProxy?.logout()
@@ -138,7 +144,11 @@ import SwiftUI
         observeLiveLocationState(locationServices.liveLocationService)
         restoreLiveLocation(locationServices.liveLocationService, roomSummaryProvider: clientProxy.roomSummaryProvider)
 
-        let flow = UserSessionFlowCoordinator(clientProxy: clientProxy, locationServices: locationServices, showsVerificationOnStart: needsVerification)
+        let voiceMessageServices = makeVoiceMessageServices(clientProxy)
+        self.voiceMessageServices = voiceMessageServices
+
+        let flow = UserSessionFlowCoordinator(clientProxy: clientProxy, locationServices: locationServices, voiceMessageServices: voiceMessageServices,
+                                              showsVerificationOnStart: needsVerification)
         flow.actionsPublisher
             .sink { [weak self] action in
                 switch action {
@@ -157,6 +167,7 @@ import SwiftUI
 
     private func clearSession() {
         stopLiveLocation()
+        stopVoicePlayback()
         teardownSync(of: clientProxy, wasRunning: isSyncRunning)
         sessionStore.clear()
         showAuthentication()
@@ -197,6 +208,11 @@ import SwiftUI
             await restoreTask?.value
             await liveLocationService?.stop()
         }
+    }
+
+    private func stopVoicePlayback() {
+        voiceMessageServices?.player.stop()
+        voiceMessageServices = nil
     }
 
     /// Chains onto any in-flight start/stop so a fast run of phase changes applies in order: a request

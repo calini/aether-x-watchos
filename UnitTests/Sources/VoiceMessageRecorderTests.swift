@@ -255,7 +255,7 @@ struct VoiceMessageRecorderTests {
     @Test
     func waveformIsReducedTo100Values() async throws {
         #expect(VoiceMessageRecorder.waveform(from: []) == Array(repeating: 0, count: 100))
-        #expect(VoiceMessageRecorder.waveform(from: [0.2, 0.4]) == [0.2] + Array(repeating: 0.4, count: 99))
+        #expect(VoiceMessageRecorder.waveform(from: [0.3]) == Array(repeating: 0.3, count: 100))
         let alternating = (0..<200).map { Float($0 % 2) }
         #expect(VoiceMessageRecorder.waveform(from: alternating) == Array(repeating: 0.5, count: 100))
         let steps = (0..<300).map { Float($0 / 3) / 128 }
@@ -276,6 +276,36 @@ struct VoiceMessageRecorderTests {
         }
         #expect(message.waveform == Array(repeating: 0, count: 50) + Array(repeating: 1, count: 50))
         harness.removeRecording()
+    }
+
+    @Test
+    func aShortRecordingIsStretchedAcrossTheWholeWaveform() {
+        let ramp = (0..<12).map { Float($0) / 11 }
+
+        let waveform = VoiceMessageRecorder.waveform(from: ramp)
+
+        #expect(waveform.count == 100)
+        // Interpolated end to end, rather than padded with a flat tail.
+        for (index, level) in waveform.enumerated() {
+            #expect(abs(level - Float(index) / 99) < 0.0001)
+        }
+        let twoLevels = VoiceMessageRecorder.waveform(from: [0.2, 0.4])
+        #expect(twoLevels.first == 0.2)
+        #expect(twoLevels.last == 0.4)
+        #expect(abs(twoLevels[50] - 0.301) < 0.001)
+    }
+
+    @Test
+    func aLongRecordingAveragesItsSamplesIntoBuckets() {
+        let samples = (0..<1234).map { Float($0 % 7) / 6 }
+
+        let waveform = VoiceMessageRecorder.waveform(from: samples)
+
+        #expect(waveform.count == 100)
+        for bucket in 0..<100 {
+            let slice = samples[bucket * 1234 / 100..<(bucket + 1) * 1234 / 100]
+            #expect(abs(waveform[bucket] - slice.reduce(0, +) / Float(slice.count)) < 0.0001)
+        }
     }
 
     @Test

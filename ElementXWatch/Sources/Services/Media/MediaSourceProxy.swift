@@ -17,6 +17,12 @@ struct MediaSourceProxy: Hashable {
         url = source.url()
     }
 
+    /// A plain (unencrypted) source, e.g. for previews.
+    init?(url: String) {
+        guard let source = try? MediaSource.fromUrl(url: url) else { return nil }
+        self.init(source: source)
+    }
+
     static func == (lhs: MediaSourceProxy, rhs: MediaSourceProxy) -> Bool {
         lhs.url == rhs.url
     }

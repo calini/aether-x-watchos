@@ -20,11 +20,17 @@ struct Setup {
     let locationProvider = LocationProviderMock()
     let liveLocationService = LiveLocationServiceMock()
     let liveLocationState = CurrentValueSubject<LiveLocationState, Never>(.idle)
+    let audioSession = AudioSessionProxyMock()
+    let voiceMessagePlayer = VoiceMessagePlayerMock()
     /// Named calls in the order they happened, for tests that check sequencing.
     let calls = Recorder<String>()
 
     var locationServices: LocationServices {
         LocationServices(locationProvider: locationProvider, liveLocationService: liveLocationService)
+    }
+
+    var voiceMessageServices: VoiceMessageServices {
+        VoiceMessageServices(audioSession: audioSession, player: voiceMessagePlayer)
     }
 
     init() {
@@ -41,6 +47,8 @@ struct Setup {
         locationProvider.authorizationPublisher = Just(.authorized).eraseToAnyPublisher()
         liveLocationService.state = .idle
         liveLocationService.statePublisher = liveLocationState.eraseToAnyPublisher()
+        voiceMessagePlayer.state = .idle
+        voiceMessagePlayer.statePublisher = Just(.idle).eraseToAnyPublisher()
     }
 }
 

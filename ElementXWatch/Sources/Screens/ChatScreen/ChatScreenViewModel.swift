@@ -13,6 +13,7 @@ typealias ChatScreenViewModelType = StateStoreViewModelV2<ChatScreenViewState, C
 final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelProtocol {
     private let timelineProxy: TimelineProxyProtocol
     private let liveLocationService: LiveLocationServiceProtocol
+    private let voiceMessagePlayer: VoiceMessagePlayerProtocol
     private let now: () -> Date
     private var hasAppeared = false
     private var lastReadItemID: String?
@@ -24,10 +25,12 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
          timelineProxy: TimelineProxyProtocol,
          roomLocationProxy: RoomLocationProxyProtocol?,
          liveLocationService: LiveLocationServiceProtocol,
+         voiceMessagePlayer: VoiceMessagePlayerProtocol,
          now: @escaping () -> Date = Date.init,
          ticks: AnyPublisher<Void, Never> = LiveLocationExpiry.ticks) {
         self.timelineProxy = timelineProxy
         self.liveLocationService = liveLocationService
+        self.voiceMessagePlayer = voiceMessagePlayer
         self.now = now
         super.init(initialViewState: ChatScreenViewState(roomName: roomName, showsSenderNames: !isDirect, now: now()))
 
@@ -57,12 +60,19 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         ticks
             .sink { [weak self] in self?.refreshNow() }
             .store(in: &cancellables)
+
+        voiceMessagePlayer.statePublisher
+            .removeDuplicates()
+            .sink { [weak self] playback in self?.state.voicePlayback = playback }
+            .store(in: &cancellables)
     }
 
     override func process(viewAction: ChatScreenViewAction) {
         switch viewAction {
         case .appear:
             appear()
+        case .disappear:
+            voiceMessagePlayer.stop()
         case .paginateBackwards:
             paginateBackwards()
         case .send(let text):
@@ -72,6 +82,8 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
         case .showLocation(let item):
             showLocation(item)
         case .showAttachments:
+            // The recorder and the players share one audio session, so only one of them may use it at a time.
+            voiceMessagePlayer.stop()
             state.bindings.attachments = AttachmentsPresentation()
         case .reply(let item):
             state.bindings.actionsItem = nil
@@ -92,6 +104,8 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             state.bindings.errorMessage = nil
         case .stopLiveLocation:
             Task { await liveLocationService.stop() }
+        case .toggleVoicePlayback(let item):
+            toggleVoicePlayback(item)
         }
     }
 
@@ -148,6 +162,15 @@ final class ChatScreenViewModel: ChatScreenViewModelType, ChatScreenViewModelPro
             return liveLocation.geoURI.map { .location($0, description: nil) }
         default:
             return nil
+        }
+    }
+
+    private func toggleVoicePlayback(_ item: EventItem) {
+        guard case .voice(let voice) = item.body else { return }
+        if case .playing = state.voicePlayback(for: item) {
+            voiceMessagePlayer.pause()
+        } else {
+            Task { await voiceMessagePlayer.play(id: item.id, source: voice.source) }
         }
     }
 

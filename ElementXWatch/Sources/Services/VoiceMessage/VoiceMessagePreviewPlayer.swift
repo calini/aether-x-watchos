@@ -102,7 +102,8 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in finishPlaying() }
+        let playerID = ObjectIdentifier(player)
+        Task { @MainActor in finishPlaying(playerID: playerID) }
     }
 
     // MARK: - Private
@@ -110,7 +111,7 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
     private func prepare(fileURL: URL) async -> Bool {
         generation += 1
         let preparingGeneration = generation
-        let outputURL = FileManager.default.temporaryDirectory.appending(path: "VoiceMessages/\(UUID().uuidString)-preview.caf")
+        let outputURL = VoiceMessageServices.temporaryDirectory.appending(path: "\(UUID().uuidString)-preview.caf")
 
         let isDecoded = await Task.detached {
             do {
@@ -134,7 +135,10 @@ final class VoiceMessagePreviewPlayer: NSObject, VoiceMessagePreviewPlayerProtoc
         return true
     }
 
-    private func finishPlaying() {
+    /// `playerID` names the player that finished: a late callback from one that was since replaced is ignored,
+    /// so it can't release the session or reset newer playback.
+    private func finishPlaying(playerID: ObjectIdentifier) {
+        guard let player, ObjectIdentifier(player) == playerID else { return }
         stopProgressUpdates()
         audioSession.deactivate()
         stateSubject.send(.stopped)

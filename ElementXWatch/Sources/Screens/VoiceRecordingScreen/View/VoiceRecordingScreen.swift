@@ -58,7 +58,7 @@ struct VoiceRecordingScreen: View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 RecordingDot(level: level)
-                Text(Self.formatted(elapsed))
+                Text(elapsed.formattedMinutesSeconds())
                     .font(.title2.monospacedDigit())
                     .foregroundStyle(isNearLimit ? Color.compound.textWarningPrimary : Color.compound.textPrimary)
             }
@@ -92,7 +92,7 @@ struct VoiceRecordingScreen: View {
                     WaveformView(waveform: waveform, progress: viewState.playbackProgress)
                         .frame(height: 28)
                 }
-                Text(Self.formatted(viewState.remainingPlaybackTime ?? message.duration, roundingUp: true))
+                Text((viewState.remainingPlaybackTime ?? message.duration).formattedMinutesSeconds(roundingUp: true))
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(Color.compound.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -119,12 +119,6 @@ struct VoiceRecordingScreen: View {
     private var isShowingError: Binding<Bool> {
         Binding(get: { context.viewState.bindings.errorMessage != nil },
                 set: { if !$0 { context.errorMessage = nil } })
-    }
-
-    /// "m:ss"
-    private static func formatted(_ time: TimeInterval, roundingUp: Bool = false) -> String {
-        let seconds = Int(roundingUp ? time.rounded(.up) : time.rounded(.down))
-        return Duration.seconds(max(seconds, 0)).formatted(.time(pattern: .minuteSecond))
     }
 }
 

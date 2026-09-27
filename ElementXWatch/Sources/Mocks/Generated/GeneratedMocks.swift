@@ -9,6 +9,82 @@
 
 import Foundation
 
+nonisolated class AudioPlaybackBackendMock: AudioPlaybackBackend, @unchecked Sendable {
+    var duration: TimeInterval {
+        get { return underlyingDuration }
+        set(value) { underlyingDuration = value }
+    }
+    nonisolated(unsafe) var underlyingDuration: TimeInterval!
+    var currentTime: TimeInterval {
+        get { return underlyingCurrentTime }
+        set(value) { underlyingCurrentTime = value }
+    }
+    nonisolated(unsafe) var underlyingCurrentTime: TimeInterval!
+    nonisolated(unsafe) var finishHandler: (() -> Void)?
+
+    //MARK: - play
+
+    private let playCallsCountLock = NSLock()
+    private nonisolated(unsafe) var playUnderlyingCallsCount = 0
+    var playCallsCount: Int {
+        get { playCallsCountLock.withLock { playUnderlyingCallsCount } }
+        set { playCallsCountLock.withLock { playUnderlyingCallsCount = newValue } }
+    }
+    var playCalled: Bool {
+        return playCallsCount > 0
+    }
+
+    private let playReturnValueLock = NSLock()
+    private nonisolated(unsafe) var playUnderlyingReturnValue: Bool!
+    var playReturnValue: Bool! {
+        get { playReturnValueLock.withLock { playUnderlyingReturnValue } }
+        set { playReturnValueLock.withLock { playUnderlyingReturnValue = newValue } }
+    }
+    nonisolated(unsafe) var playClosure: (() -> Bool)?
+
+    func play() -> Bool {
+        playCallsCountLock.withLock { playUnderlyingCallsCount += 1 }
+        if let playClosure = playClosure {
+            return playClosure()
+        } else {
+            return playReturnValue
+        }
+    }
+    //MARK: - pause
+
+    private let pauseCallsCountLock = NSLock()
+    private nonisolated(unsafe) var pauseUnderlyingCallsCount = 0
+    var pauseCallsCount: Int {
+        get { pauseCallsCountLock.withLock { pauseUnderlyingCallsCount } }
+        set { pauseCallsCountLock.withLock { pauseUnderlyingCallsCount = newValue } }
+    }
+    var pauseCalled: Bool {
+        return pauseCallsCount > 0
+    }
+    nonisolated(unsafe) var pauseClosure: (() -> Void)?
+
+    func pause() {
+        pauseCallsCountLock.withLock { pauseUnderlyingCallsCount += 1 }
+        pauseClosure?()
+    }
+    //MARK: - stop
+
+    private let stopCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopUnderlyingCallsCount = 0
+    var stopCallsCount: Int {
+        get { stopCallsCountLock.withLock { stopUnderlyingCallsCount } }
+        set { stopCallsCountLock.withLock { stopUnderlyingCallsCount = newValue } }
+    }
+    var stopCalled: Bool {
+        return stopCallsCount > 0
+    }
+    nonisolated(unsafe) var stopClosure: (() -> Void)?
+
+    func stop() {
+        stopCallsCountLock.withLock { stopUnderlyingCallsCount += 1 }
+        stopClosure?()
+    }
+}
 nonisolated class AudioRecorderBackendMock: AudioRecorderBackend, @unchecked Sendable {
     var currentTime: TimeInterval {
         get { return underlyingCurrentTime }
@@ -1770,6 +1846,84 @@ nonisolated class UserSessionRestorerMock: UserSessionRestorerProtocol, @uncheck
         } else {
             return restoreReturnValue
         }
+    }
+}
+nonisolated class VoiceMessagePlayerMock: VoiceMessagePlayerProtocol, @unchecked Sendable {
+    var statePublisher: AnyPublisher<VoicePlaybackState, Never> {
+        get { return underlyingStatePublisher }
+        set(value) { underlyingStatePublisher = value }
+    }
+    nonisolated(unsafe) var underlyingStatePublisher: AnyPublisher<VoicePlaybackState, Never>!
+    var state: VoicePlaybackState {
+        get { return underlyingState }
+        set(value) { underlyingState = value }
+    }
+    nonisolated(unsafe) var underlyingState: VoicePlaybackState!
+
+    //MARK: - play
+
+    private let playIdSourceCallsCountLock = NSLock()
+    private nonisolated(unsafe) var playIdSourceUnderlyingCallsCount = 0
+    var playIdSourceCallsCount: Int {
+        get { playIdSourceCallsCountLock.withLock { playIdSourceUnderlyingCallsCount } }
+        set { playIdSourceCallsCountLock.withLock { playIdSourceUnderlyingCallsCount = newValue } }
+    }
+    var playIdSourceCalled: Bool {
+        return playIdSourceCallsCount > 0
+    }
+    private let playIdSourceReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var playIdSourceUnderlyingReceivedArguments: (id: String, source: MediaSourceProxy)?
+    var playIdSourceReceivedArguments: (id: String, source: MediaSourceProxy)? {
+        get { playIdSourceReceivedArgumentsLock.withLock { playIdSourceUnderlyingReceivedArguments } }
+        set { playIdSourceReceivedArgumentsLock.withLock { playIdSourceUnderlyingReceivedArguments = newValue } }
+    }
+    private let playIdSourceReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var playIdSourceUnderlyingReceivedInvocations: [(id: String, source: MediaSourceProxy)] = []
+    var playIdSourceReceivedInvocations: [(id: String, source: MediaSourceProxy)] {
+        get { playIdSourceReceivedInvocationsLock.withLock { playIdSourceUnderlyingReceivedInvocations } }
+        set { playIdSourceReceivedInvocationsLock.withLock { playIdSourceUnderlyingReceivedInvocations = newValue } }
+    }
+    nonisolated(unsafe) var playIdSourceClosure: ((String, MediaSourceProxy) async -> Void)?
+
+    @concurrent func play(id: String, source: MediaSourceProxy) async {
+        playIdSourceCallsCountLock.withLock { playIdSourceUnderlyingCallsCount += 1 }
+        playIdSourceReceivedArguments = (id: id, source: source)
+        playIdSourceReceivedInvocationsLock.withLock { playIdSourceUnderlyingReceivedInvocations.append((id: id, source: source)) }
+        await playIdSourceClosure?(id, source)
+    }
+    //MARK: - pause
+
+    private let pauseCallsCountLock = NSLock()
+    private nonisolated(unsafe) var pauseUnderlyingCallsCount = 0
+    var pauseCallsCount: Int {
+        get { pauseCallsCountLock.withLock { pauseUnderlyingCallsCount } }
+        set { pauseCallsCountLock.withLock { pauseUnderlyingCallsCount = newValue } }
+    }
+    var pauseCalled: Bool {
+        return pauseCallsCount > 0
+    }
+    nonisolated(unsafe) var pauseClosure: (() -> Void)?
+
+    func pause() {
+        pauseCallsCountLock.withLock { pauseUnderlyingCallsCount += 1 }
+        pauseClosure?()
+    }
+    //MARK: - stop
+
+    private let stopCallsCountLock = NSLock()
+    private nonisolated(unsafe) var stopUnderlyingCallsCount = 0
+    var stopCallsCount: Int {
+        get { stopCallsCountLock.withLock { stopUnderlyingCallsCount } }
+        set { stopCallsCountLock.withLock { stopUnderlyingCallsCount = newValue } }
+    }
+    var stopCalled: Bool {
+        return stopCallsCount > 0
+    }
+    nonisolated(unsafe) var stopClosure: (() -> Void)?
+
+    func stop() {
+        stopCallsCountLock.withLock { stopUnderlyingCallsCount += 1 }
+        stopClosure?()
     }
 }
 nonisolated class VoiceMessagePreviewPlayerMock: VoiceMessagePreviewPlayerProtocol, @unchecked Sendable {

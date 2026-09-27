@@ -17,7 +17,7 @@ struct ChatScreenCoordinatorParameters {
     let roomLocationProxy: RoomLocationProxyProtocol?
     let locationServices: LocationServices
     let mapSnapshotLoader: MapSnapshotLoaderProtocol
-    let audioSession: AudioSessionProxyProtocol
+    let voiceMessageServices: VoiceMessageServices
     /// Names another room, e.g. the one a live share runs in; `nil` if unknown.
     let roomNameForID: (String) -> String?
 }
@@ -34,7 +34,8 @@ final class ChatScreenCoordinator: CoordinatorProtocol {
         self.parameters = parameters
         viewModel = ChatScreenViewModel(roomID: parameters.roomID, roomName: parameters.roomName, isDirect: parameters.isDirect,
                                         timelineProxy: parameters.timelineProxy, roomLocationProxy: parameters.roomLocationProxy,
-                                        liveLocationService: parameters.locationServices.liveLocationService)
+                                        liveLocationService: parameters.locationServices.liveLocationService,
+                                        voiceMessagePlayer: parameters.voiceMessageServices.player)
     }
 
     func toPresentable() -> AnyView {
@@ -66,9 +67,9 @@ final class ChatScreenCoordinator: CoordinatorProtocol {
                                                                timelineProxy: parameters.timelineProxy,
                                                                mapSnapshotLoader: parameters.mapSnapshotLoader))
         } makeVoiceRecording: {
-            VoiceRecordingScreenCoordinator(parameters: .init(recorder: VoiceMessageRecorder(audioSession: parameters.audioSession),
+            VoiceRecordingScreenCoordinator(parameters: .init(recorder: VoiceMessageRecorder(audioSession: parameters.voiceMessageServices.audioSession),
                                                               timelineProxy: parameters.timelineProxy,
-                                                              audioSession: parameters.audioSession))
+                                                              audioSession: parameters.voiceMessageServices.audioSession))
         }
         attachmentsCancellable = coordinator.actionsPublisher
             .sink { [weak self] action in

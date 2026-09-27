@@ -136,6 +136,15 @@ nonisolated enum WatchStrings {
     static let delete = "Delete"
     static let play = "Play"
     static let pause = "Pause"
+    static let loading = "Loading"
+    static let playing = "Playing"
+    static let paused = "Paused"
+    static let playVoiceMessageFailed = "Couldn't play voice message. Tap to try again."
+
+    /// "Voice message, 0:12"
+    static func voiceMessage(duration: String) -> String {
+        "\(voiceMessage), \(duration)"
+    }
 
     /// A location message's plain-text body, for clients that can't show a map (same as element-x-ios).
     static func locationWasShared(at geoURI: String) -> String {

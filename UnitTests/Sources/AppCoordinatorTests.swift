@@ -220,7 +220,7 @@ struct AppCoordinatorTests {
 
         try await waitUntil { setup.clientProxy.startSyncCallsCount == 1 }
         // Otherwise the live share could miss an own-beacon update from the first sync.
-        #expect(setup.calls.values == ["makeLocationServices", "startSync"])
+        #expect(setup.calls.values == ["makeLocationServices", "makeVoiceMessageServices", "startSync"])
     }
 
     @Test
@@ -298,6 +298,33 @@ struct AppCoordinatorTests {
         try await waitUntil { setup.liveLocationService.stopCallsCount == 1 }
     }
 
+    @Test
+    func signingOutStopsVoicePlayback() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+        #expect(setup.calls.values.contains("makeVoiceMessageServices"))
+
+        var callOrder: [String] = []
+        setup.voiceMessagePlayer.stopClosure = { callOrder.append("stopVoicePlayback") }
+        setup.clientProxy.logoutClosure = { callOrder.append("logout") }
+
+        await coordinator.signOut()
+
+        #expect(callOrder == ["stopVoicePlayback", "logout"])
+    }
+
+    @Test
+    func authErrorsStopVoicePlayback() async throws {
+        let (coordinator, restorer, _, setup) = makeCoordinator()
+        restorer.restoreReturnValue = .success(setup.clientProxy)
+        await coordinator.start()
+
+        setup.actions.send(.authError(isSoftLogout: false))
+
+        try await waitUntil { setup.voiceMessagePlayer.stopCallsCount == 1 }
+    }
+
     // MARK: - Helpers
 
     private func makeCoordinator() -> (AppCoordinator, UserSessionRestorerMock, SessionStoreMock, Setup) {
@@ -311,6 +338,10 @@ struct AppCoordinatorTests {
                                          makeLocationServices: { _ in
                                              setup.calls.values.append("makeLocationServices")
                                              return setup.locationServices
+                                         },
+                                         makeVoiceMessageServices: { _ in
+                                             setup.calls.values.append("makeVoiceMessageServices")
+                                             return setup.voiceMessageServices
                                          })
         return (coordinator, restorer, sessionStore, setup)
     }

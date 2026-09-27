@@ -177,10 +177,17 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
         stateSubject.send(.idle)
     }
 
-    /// Reduces the level samples to `count` bucket means, padding a short recording with its last level.
+    /// Resamples the level samples to `count` values spanning the whole recording: bucket means when there are
+    /// more samples than values, else linear interpolation between neighbouring samples.
     nonisolated static func waveform(from samples: [Float], count: Int = waveformCount) -> [Float] {
         guard samples.count >= count else {
-            return samples + Array(repeating: samples.last ?? 0, count: count - samples.count)
+            guard samples.count > 1 else { return Array(repeating: samples.first ?? 0, count: count) }
+            return (0..<count).map { index in
+                let position = Float(index) * Float(samples.count - 1) / Float(count - 1)
+                let lower = min(Int(position), samples.count - 2)
+                let fraction = position - Float(lower)
+                return samples[lower] + (samples[lower + 1] - samples[lower]) * fraction
+            }
         }
         return (0..<count).map { bucket in
             let bucketSamples = samples[bucket * samples.count / count..<(bucket + 1) * samples.count / count]
@@ -249,7 +256,7 @@ final class VoiceMessageRecorder: VoiceMessageRecorderProtocol {
     }
 
     private static func makeRecordingURL() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appending(path: "VoiceMessages", directoryHint: .isDirectory)
+        let directory = VoiceMessageServices.temporaryDirectory
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appending(path: "\(UUID().uuidString).caf")
     }

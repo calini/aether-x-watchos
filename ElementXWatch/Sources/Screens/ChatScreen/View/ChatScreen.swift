@@ -33,6 +33,7 @@ struct ChatScreen: View {
         }
         .navigationTitle(context.viewState.roomName)
         .onAppear { context.send(viewAction: .appear) }
+        .onDisappear { context.send(viewAction: .disappear) }
         .sheet(item: $context.actionsItem) { item in
             MessageActionsSheet(item: item,
                                  onReact: { context.send(viewAction: .react(key: $0, item: item)) },
@@ -64,7 +65,9 @@ struct ChatScreen: View {
                           onLongPress: { context.send(viewAction: .showActions(event)) },
                           onRetry: { context.send(viewAction: .retry(event)) },
                           onShowLocation: { context.send(viewAction: .showLocation(event)) },
-                          onStopLiveLocation: context.viewState.canStopLiveLocation(from: event) ? { context.send(viewAction: .stopLiveLocation) } : nil)
+                          onStopLiveLocation: context.viewState.canStopLiveLocation(from: event) ? { context.send(viewAction: .stopLiveLocation) } : nil,
+                          voicePlayback: context.viewState.voicePlayback(for: event),
+                          onToggleVoicePlayback: { context.send(viewAction: .toggleVoicePlayback(event)) })
         case .dateDivider(let date):
             Text(date, format: .dateTime.weekday().day().month())
                 .font(.caption2)
@@ -186,7 +189,7 @@ struct ChatScreen_Previews: PreviewProvider {
             return .success(false)
         }
         let viewModel = ChatScreenViewModel(roomID: roomID, roomName: "Bob", isDirect: true, timelineProxy: proxy, roomLocationProxy: nil,
-                                            liveLocationService: makeLiveLocationService(.idle))
+                                            liveLocationService: makeLiveLocationService(.idle), voiceMessagePlayer: makeVoicePlayer(.idle))
         viewModel.state.items = items
         viewModel.state.reachedStart = false
         return viewModel
@@ -222,6 +225,16 @@ struct ChatScreen_Previews: PreviewProvider {
         ])
     }
 
+    static var voiceMessages: ChatScreenViewModel {
+        let waveform: [Float] = (0..<100).map { index in Float(abs(sin(Double(index) / 5))) * 0.8 + 0.1 }
+        let source = MediaSourceProxy(url: "mxc://example.org/voice")!
+        return makeViewModel(isDirect: false, voicePlayback: .playing(id: "$12", progress: 0.4, elapsed: 5), items: [
+            makeItem("11", "", own: false, body: .voice(VoiceBody(duration: 8, waveform: waveform, source: source))),
+            makeItem("12", "", own: true, body: .voice(VoiceBody(duration: 12.4, waveform: waveform, source: source))),
+            makeItem("13", "", own: false, body: .voice(VoiceBody(duration: 3, waveform: [], source: source)))
+        ])
+    }
+
     static func sharingLive(isPaused: Bool) -> ChatScreenViewModel {
         let geoURI = GeoURI(latitude: 51.5072, longitude: -0.1276, uncertainty: nil)
         let endsAt = Date.now.addingTimeInterval(12 * 60)
@@ -253,6 +266,8 @@ struct ChatScreen_Previews: PreviewProvider {
         screen(locations)
             .environment(\.mapSnapshotLoader, MapSnapshotLoader())
             .previewDisplayName("Locations")
+        screen(voiceMessages)
+            .previewDisplayName("Voice messages")
         screen(sharingLive(isPaused: false))
             .environment(\.mapSnapshotLoader, MapSnapshotLoader())
             .previewDisplayName("Sharing live")
@@ -273,16 +288,25 @@ struct ChatScreen_Previews: PreviewProvider {
                                                      replyTo: nil, reactions: reactions, isEdited: false, sendState: sendState, canBeRepliedTo: true)))
     }
 
-    static func makeViewModel(isDirect: Bool, liveState: LiveLocationState = .idle, items: [TimelineItem] = items) -> ChatScreenViewModel {
+    static func makeViewModel(isDirect: Bool, liveState: LiveLocationState = .idle, voicePlayback: VoicePlaybackState = .idle,
+                              items: [TimelineItem] = items) -> ChatScreenViewModel {
         let proxy = TimelineProxyMock()
         proxy.itemsPublisher = Just(items).eraseToAnyPublisher()
         // Safe default in case a preview's spinner drives a real `.paginateBackwards` via `.task`.
         proxy.paginateBackwardsReturnValue = .success(false)
         let viewModel = ChatScreenViewModel(roomID: roomID, roomName: isDirect ? "Bob" : "Climbing crew", isDirect: isDirect, timelineProxy: proxy,
-                                            roomLocationProxy: nil, liveLocationService: makeLiveLocationService(liveState))
+                                            roomLocationProxy: nil, liveLocationService: makeLiveLocationService(liveState),
+                                            voiceMessagePlayer: makeVoicePlayer(voicePlayback))
         viewModel.state.items = items
         viewModel.state.reachedStart = true
         return viewModel
+    }
+
+    static func makeVoicePlayer(_ state: VoicePlaybackState) -> VoiceMessagePlayerMock {
+        let player = VoiceMessagePlayerMock()
+        player.state = state
+        player.statePublisher = Just(state).eraseToAnyPublisher()
+        return player
     }
 
     static func makeLiveLocationService(_ state: LiveLocationState) -> LiveLocationServiceMock {

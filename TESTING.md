@@ -52,6 +52,20 @@ Location permission: the first share asks for "when in use" access; a live share
 | L5 | A share whose sender never stops it (e.g. phone switched off) reads "Live location ended" once its time runs out, in the bubble and on the full-screen map. | | |
 | L6 | Battery use over a 1-hour share (note start and end %). | | |
 
+## Voice messages (spec §7)
+
+Microphone permission: the first recording asks for it. If it was declined, turn it on in Settings → Privacy & Security → Microphone.
+
+| # | Check | Result | Notes |
+|---|---|---|---|
+| V1 | (+) → Voice message, record a few seconds, Stop, review (▶︎ plays it, the waveform spans the whole width), then Send: it plays in Element X on the iPhone. | | |
+| V2 | A voice message sent from the iPhone plays on the watch: the button spins while it loads, the waveform fills and the time counts up. Check it through the watch speaker and through AirPods. | | |
+| V3 | Record past 4:30: the watch taps your wrist and the time turns amber. At 5:00 recording stops by itself and goes to review. | | |
+| V4 | Interrupt a recording with a phone call: it stops and keeps what was recorded. | | |
+| V5 | Deny microphone permission: the recording screen explains how to turn it on, and nothing is recorded. | | |
+| V6 | Play one voice message, then another: the first stops. Leave the chat while one plays: playback stops. Open (+) while one plays: playback stops. | | |
+| V7 | With no connection, play a voice message that was never played: the button shows ⚠︎. Reconnect and tap it: it plays. | | |
+
 ## Transport audit
 
 - [ ] Console (Xcode → Devices → Open Console, filter `io.ilie.elementx.watch`) shows no `127.0.0.1:9` / proxy connection errors during the session.

@@ -27,12 +27,12 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
 
     private let clientProxy: ClientProxyProtocol
     private let locationServices: LocationServices
+    private let voiceMessageServices: VoiceMessageServices
     private let showsVerificationOnStart: Bool
     private let chatsCoordinator: ChatsScreenCoordinator
     private let navigation = Navigation()
     /// One per session, so its cache outlives each chat.
     private let mapSnapshotLoader = MapSnapshotLoader()
-    private let audioSession = AudioSessionProxy()
     private let actionsSubject = PassthroughSubject<UserSessionFlowCoordinatorAction, Never>()
     private var childCoordinators: [UserSessionRoute: CoordinatorProtocol] = [:]
     /// Names the room a live share runs in, when asking to replace it from another chat.
@@ -55,9 +55,10 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         navigation.verification?.context
     }
 
-    init(clientProxy: ClientProxyProtocol, locationServices: LocationServices, showsVerificationOnStart: Bool = false) {
+    init(clientProxy: ClientProxyProtocol, locationServices: LocationServices, voiceMessageServices: VoiceMessageServices, showsVerificationOnStart: Bool = false) {
         self.clientProxy = clientProxy
         self.locationServices = locationServices
+        self.voiceMessageServices = voiceMessageServices
         self.showsVerificationOnStart = showsVerificationOnStart
         chatsCoordinator = ChatsScreenCoordinator(clientProxy: clientProxy)
     }
@@ -132,7 +133,7 @@ final class UserSessionFlowCoordinator: CoordinatorProtocol {
         switch route {
         case .chat(let roomID, let name, let isDirect):
             coordinator = ChatLoaderCoordinator(roomID: roomID, name: name, isDirect: isDirect, clientProxy: clientProxy,
-                                                locationServices: locationServices, mapSnapshotLoader: mapSnapshotLoader, audioSession: audioSession,
+                                                locationServices: locationServices, mapSnapshotLoader: mapSnapshotLoader, voiceMessageServices: voiceMessageServices,
                                                 roomName: { [weak self] in self?.roomNames[$0] })
         case .settings:
             let settings = SettingsScreenCoordinator(clientProxy: clientProxy)
@@ -199,12 +200,12 @@ private final class ChatLoaderCoordinator: CoordinatorProtocol {
     private let clientProxy: ClientProxyProtocol
     private let locationServices: LocationServices
     private let mapSnapshotLoader: MapSnapshotLoaderProtocol
-    private let audioSession: AudioSessionProxyProtocol
+    private let voiceMessageServices: VoiceMessageServices
     private let roomName: (String) -> String?
     private let model = Model()
 
     init(roomID: String, name: String, isDirect: Bool, clientProxy: ClientProxyProtocol,
-         locationServices: LocationServices, mapSnapshotLoader: MapSnapshotLoaderProtocol, audioSession: AudioSessionProxyProtocol,
+         locationServices: LocationServices, mapSnapshotLoader: MapSnapshotLoaderProtocol, voiceMessageServices: VoiceMessageServices,
          roomName: @escaping (String) -> String?) {
         self.roomID = roomID
         self.name = name
@@ -212,12 +213,12 @@ private final class ChatLoaderCoordinator: CoordinatorProtocol {
         self.clientProxy = clientProxy
         self.locationServices = locationServices
         self.mapSnapshotLoader = mapSnapshotLoader
-        self.audioSession = audioSession
+        self.voiceMessageServices = voiceMessageServices
         self.roomName = roomName
     }
 
     func start() {
-        Task { [model, roomID, name, isDirect, clientProxy, locationServices, mapSnapshotLoader, audioSession, roomName] in
+        Task { [model, roomID, name, isDirect, clientProxy, locationServices, mapSnapshotLoader, voiceMessageServices, roomName] in
             // The chat holds this one proxy: every call builds a new observer of the room's live shares.
             async let roomLocationProxy = clientProxy.roomLocationProxy(for: roomID)
             if let timelineProxy = await clientProxy.timelineProxy(for: roomID) {
@@ -228,7 +229,7 @@ private final class ChatLoaderCoordinator: CoordinatorProtocol {
                                                                            roomLocationProxy: roomLocationProxy,
                                                                            locationServices: locationServices,
                                                                            mapSnapshotLoader: mapSnapshotLoader,
-                                                                           audioSession: audioSession,
+                                                                           voiceMessageServices: voiceMessageServices,
                                                                            roomNameForID: roomName))
             } else {
                 model.failed = true
