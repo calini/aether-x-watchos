@@ -6,7 +6,7 @@
 //
 
 import Combine
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Foundation
 import MatrixRustSDK
 import Testing
@@ -517,8 +517,8 @@ struct ChatScreenViewModelTests {
                                liveLocationService: LiveLocationServiceMock = LiveLocationServiceMock(),
                                voiceMessagePlayer: VoiceMessagePlayerMock? = nil,
                                clock: ExpiryClock = ExpiryClock())
-        -> (ChatScreenViewModel, TimelineProxyMock, PassthroughSubject<[ElementXWatch.TimelineItem], Never>) {
-        let items = PassthroughSubject<[ElementXWatch.TimelineItem], Never>()
+        -> (ChatScreenViewModel, TimelineProxyMock, PassthroughSubject<[AetherXWatch.TimelineItem], Never>) {
+        let items = PassthroughSubject<[AetherXWatch.TimelineItem], Never>()
         let proxy = TimelineProxyMock()
         proxy.itemsPublisher = items.eraseToAnyPublisher()
         proxy.paginateBackwardsReturnValue = .success(false)

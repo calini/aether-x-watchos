@@ -6,7 +6,7 @@
 //
 
 import AVFoundation
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Testing
 
 @Suite
@@ -143,7 +143,7 @@ struct OggOpusTests {
         #expect(pages[0].lacing == [19])
         #expect(Array(bytes[pages[0].bodyRange]) == Array("OpusHead".utf8) + [1, 1, 0x38, 0x01, 0x80, 0xBB, 0, 0, 0, 0, 0])
 
-        let vendor = Array("Element X watchOS".utf8)
+        let vendor = Array("Aether X watchOS".utf8)
         #expect(pages[1].flags == 0)
         #expect(pages[1].granule == 0)
         #expect(Array(bytes[pages[1].bodyRange]) == Array("OpusTags".utf8) + [UInt8(vendor.count), 0, 0, 0] + vendor + [0, 0, 0, 0])

@@ -3,7 +3,7 @@
 ## How to install
 
 1. Check out https://github.com/calini/matrix-rust-sdk at `../matrix-rust-sdk` (or set `MATRIX_RUST_SDK_PATH`): `watchos-http-transport` (recommended) for arm64 watches such as the Series 9, or `watchos-http-transport-arm64_32` to also support arm64_32 watches (SE 2nd generation, Series 6–8). Build the SDK for devices with the full `Tools/build-sdk.sh` (not `--dev`, which is simulator only; ~12 minutes), then run `xcodegen`.
-2. Open `ElementXWatch.xcodeproj` in Xcode.
+2. Open `AetherXWatch.xcodeproj` in Xcode.
 3. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM`. Find your Team ID in the Apple Development certificate: `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject` and use the `OU=` value (Xcode doesn't show it for Personal Teams). The value in parentheses in the certificate's `CN=` is **not** the Team ID.
 4. Keep the scheme's Run action on the **Debug** configuration: the transport audit's tripwire proxy (`127.0.0.1:9`) only exists in Debug builds.
 5. Select the watch as the run destination and Run. On a real watch, build from commit `c680eec` (runpath fix) or later.
@@ -76,7 +76,7 @@ Microphone permission: the first recording asks for it. If it was declined, turn
 
 ## Transport audit
 
-- [ ] Console (Xcode → Devices → Open Console, filter `io.ilie.elementx.watch`) shows no `127.0.0.1:9` / proxy connection errors during the session.
+- [ ] Console (Xcode → Devices → Open Console, filter `io.ilie.aetherx.watch`) shows no `127.0.0.1:9` / proxy connection errors during the session.
 - [ ] Rust logs downloaded from the app container (`Library/Caches/Logs/rust*.log`) show no reqwest connection attempts.
 
 ## Known issues

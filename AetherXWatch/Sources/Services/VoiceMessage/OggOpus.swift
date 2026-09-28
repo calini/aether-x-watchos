@@ -28,7 +28,7 @@ nonisolated struct OggOpusFile: Equatable, Sendable {
 
 /// Writes a mono Ogg Opus stream (RFC 3533, RFC 7845).
 nonisolated enum OggOpusWriter {
-    static let vendor = "Element X watchOS"
+    static let vendor = "Aether X watchOS"
     /// About 1 s of 20 ms packets.
     static let packetsPerPage = 50
 

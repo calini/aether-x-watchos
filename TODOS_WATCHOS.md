@@ -1,10 +1,10 @@
 # watchOS TODOs
 
-Open work for Element X watchOS, most important first. The SDK sections cover how the app depends on matrix-rust-sdk and what it would take to upstream that work.
+Open work for Aether X watchOS, most important first. The SDK sections cover how the app depends on matrix-rust-sdk and what it would take to upstream that work.
 
 ## matrix-rust-sdk: fork and upstreaming
 
-watchOS only lets apps use `URLSession` for networking; raw sockets aren't available outside audio and CallKit contexts ([TN3135](https://developer.apple.com/documentation/technotes/tn3135-low-level-networking-on-watchos)). The SDK normally talks HTTP through reqwest. The app instead needs a pluggable HTTP transport that it implements with `URLSession` (`ElementXWatch/Sources/Services/Transport/URLSessionTransport.swift`).
+watchOS only lets apps use `URLSession` for networking; raw sockets aren't available outside audio and CallKit contexts ([TN3135](https://developer.apple.com/documentation/technotes/tn3135-low-level-networking-on-watchos)). The SDK normally talks HTTP through reqwest. The app instead needs a pluggable HTTP transport that it implements with `URLSession` (`AetherXWatch/Sources/Services/Transport/URLSessionTransport.swift`).
 
 The SDK changes live in the fork [calini/matrix-rust-sdk](https://github.com/calini/matrix-rust-sdk), based on upstream `85bad975d`:
 

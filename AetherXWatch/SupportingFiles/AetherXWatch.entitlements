@@ -4,7 +4,7 @@
 <dict>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)io.ilie.elementx.watch</string>
+		<string>$(AppIdentifierPrefix)io.ilie.aetherx.watch</string>
 	</array>
 </dict>
 </plist>

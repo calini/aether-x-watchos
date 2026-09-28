@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct ElementXWatchApp: App {
+struct AetherXWatchApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var appCoordinator: AppCoordinator
 

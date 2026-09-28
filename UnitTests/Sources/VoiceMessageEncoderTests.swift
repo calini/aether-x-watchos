@@ -6,7 +6,7 @@
 //
 
 import AVFoundation
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Testing
 
 @Suite

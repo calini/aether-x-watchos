@@ -1,9 +1,9 @@
 sources:
   include:
-    - ../../ElementXWatch/Sources
+    - ../../AetherXWatch/Sources
   exclude:
-    - ../../ElementXWatch/Sources/Mocks
+    - ../../AetherXWatch/Sources/Mocks
 templates:
   - AutoMockable.stencil
 output:
-  ../../ElementXWatch/Sources/Mocks/Generated/GeneratedMocks.swift
+  ../../AetherXWatch/Sources/Mocks/Generated/GeneratedMocks.swift

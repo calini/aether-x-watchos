@@ -6,7 +6,7 @@
 //
 
 import Combine
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Synchronization
 import Testing
 

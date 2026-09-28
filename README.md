@@ -1,8 +1,10 @@
-# Element X watchOS
+# Aether X watchOS
 
 A standalone Apple Watch client for [Matrix](https://matrix.org), built on the same [matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk) as [Element X iOS](https://github.com/element-hq/element-x-ios). It signs in, syncs, sends and receives on its own. Your iPhone doesn't need to be nearby.
 
 **Status:** an early personal project (v0.3.0), sideloaded onto the author's Apple Watch. It isn't affiliated with or supported by Element.
+
+**The name:** the aether was the classical fifth element, the medium that was thought to carry light and signals everywhere, owned by no one. That suits Matrix, where messages travel from your server to other people's servers with no centre in between. It was called Element X watchOS until v0.3.0, and was renamed so it isn't mistaken for an official Element app.
 
 ## How we got here
 
@@ -99,7 +101,7 @@ Syncing some state with the iPhone app, such as notification settings.
    - The full build covers the simulator and devices, and takes about 12 minutes.
    - `--dev` builds for the simulator only.
    - `--arm64-only` skips `arm64_32`. This is automatic on `watchos-http-transport`.
-3. Generate the project with `xcodegen`, then open `ElementXWatch.xcodeproj`.
+3. Generate the project with `xcodegen`, then open `AetherXWatch.xcodeproj`.
 4. For a real watch, copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your Team ID. [TESTING.md](TESTING.md) explains how to find it. Run a Debug build with Sleep Focus off.
 
 ## More

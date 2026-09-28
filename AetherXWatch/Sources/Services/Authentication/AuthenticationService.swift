@@ -68,7 +68,7 @@ private struct PendingLogin {
 }
 
 final class AuthenticationService: AuthenticationServiceProtocol, QRLoginServiceProtocol {
-    private static let deviceName = "Element X Watch"
+    private static let deviceName = "Aether X Watch"
 
     private let clientFactory: ClientFactoryProtocol
     private let sessionStore: SessionStoreProtocol

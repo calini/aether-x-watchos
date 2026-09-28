@@ -8,7 +8,7 @@
 /// English UI strings for the watch app (no localisation yet).
 /// Nonisolated so callers off the main actor (e.g. `QRLoginError`, an `Error` type) can read them too.
 nonisolated enum WatchStrings {
-    static let appName = "Element X"
+    static let appName = "Aether X"
     static let tryAgain = "Try again"
     static let cancel = "Cancel"
     static let you = "You"
@@ -34,9 +34,9 @@ nonisolated enum WatchStrings {
     static let qrErrorDeclined = "Sign-in was declined on your phone."
     static let qrErrorCancelled = "Sign-in was cancelled."
     static let qrErrorInsecure = "The codes didn't match. Try again."
-    static let qrErrorLinkingNotSupported = "Your phone can't link devices. Update Element X and turn on Link new device."
+    static let qrErrorLinkingNotSupported = "Your phone can't link devices. Update Aether X and turn on Link new device."
     static let qrErrorServerNotSupported = "This server doesn't support signing in with a QR code."
-    static let qrErrorOtherDeviceNotSignedIn = "Element X on your phone isn't signed in."
+    static let qrErrorOtherDeviceNotSignedIn = "Aether X on your phone isn't signed in."
     static let qrErrorUnknown = "Something went wrong. Try again."
 
     static let serverUnreachable = "Couldn't reach this server."
@@ -57,10 +57,10 @@ nonisolated enum WatchStrings {
     static let signInAction = "Sign in"
 
     static let signInTitle = "Sign in with your iPhone"
-    static let signInInstructions = "On your iPhone open Element X → Settings → Link new device → Link desktop computer, then scan the code."
+    static let signInInstructions = "On your iPhone open Aether X → Settings → Link new device → Link desktop computer, then scan the code."
     static let signInStart = "Show code"
     static let preparing = "Preparing…"
-    static let scanWithPhone = "Scan with Element X"
+    static let scanWithPhone = "Scan with Aether X"
     static let enterCheckCode = "Enter the code shown on your iPhone"
     static let confirm = "Confirm"
     static let approveOnPhone = "Approve on your iPhone"
@@ -68,7 +68,7 @@ nonisolated enum WatchStrings {
     static let syncingKeys = "Securing your messages…"
 
     static let verifyTitle = "Verify this watch"
-    static let verifyIntro = "Open Element X on your iPhone to accept, then compare the emojis."
+    static let verifyIntro = "Open Aether X on your iPhone to accept, then compare the emojis."
     static let verifyStart = "Start"
     static let notNow = "Not now"
     static let verifyWaiting = "Accept the request on your iPhone…"
@@ -87,7 +87,7 @@ nonisolated enum WatchStrings {
     static let offline = "Offline"
     static let connecting = "Connecting…"
     static let signOut = "Sign out"
-    static let signOutConfirmation = "Sign out of Element X on this watch?"
+    static let signOutConfirmation = "Sign out of Aether X on this watch?"
     static let verified = "Verified session"
     static let unverified = "Unverified session"
     static let verificationUnknown = "Checking verification…"

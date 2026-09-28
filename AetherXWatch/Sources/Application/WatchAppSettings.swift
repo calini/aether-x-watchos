@@ -11,18 +11,18 @@ import MatrixRustSDK
 /// Static configuration for the watch app.
 nonisolated enum WatchAppSettings {
     static let defaultServerName = "matrix.org"
-    static let keychainService = "io.ilie.elementx.watch.sessions"
-    static let userAgent = "ElementXWatch/0.1.0 (watchOS)"
+    static let keychainService = "io.ilie.aetherx.watch.sessions"
+    static let userAgent = "AetherXWatch/0.1.0 (watchOS)"
 
     /// OAuth client metadata for dynamic registration with the account's MAS.
     /// All URIs share one host, as MAS requires; the redirect is never used by the device-code QR flow.
     static var oAuthConfiguration: OAuthConfiguration {
-        OAuthConfiguration(clientName: "Element X Watch",
-                           redirectUri: "https://ilie.io/element-x-watch/oauth",
-                           clientUri: "https://ilie.io/element-x-watch",
-                           logoUri: "https://ilie.io/element-x-watch/logo.png",
-                           tosUri: "https://ilie.io/element-x-watch/terms",
-                           policyUri: "https://ilie.io/element-x-watch/privacy",
+        OAuthConfiguration(clientName: "Aether X Watch",
+                           redirectUri: "https://ilie.io/aether-x-watch/oauth",
+                           clientUri: "https://ilie.io/aether-x-watch",
+                           logoUri: "https://ilie.io/aether-x-watch/logo.png",
+                           tosUri: "https://ilie.io/aether-x-watch/terms",
+                           policyUri: "https://ilie.io/aether-x-watch/privacy",
                            staticRegistrations: [:])
     }
 }

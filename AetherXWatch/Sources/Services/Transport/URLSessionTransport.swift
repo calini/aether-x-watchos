@@ -18,7 +18,7 @@ nonisolated final class URLSessionTransport: HttpTransport {
 
     private let session: URLSession
 
-    init(configuration: URLSessionConfiguration = .elementXWatch) {
+    init(configuration: URLSessionConfiguration = .aetherXWatch) {
         session = URLSession(configuration: configuration)
     }
 
@@ -69,7 +69,7 @@ nonisolated final class URLSessionTransport: HttpTransport {
 
 extension URLSessionConfiguration {
     /// No caching or cookies (the SDK owns both), no waiting for connectivity (the SDK owns retries).
-    nonisolated static var elementXWatch: URLSessionConfiguration {
+    nonisolated static var aetherXWatch: URLSessionConfiguration {
         let configuration = URLSessionConfiguration.default
         configuration.waitsForConnectivity = false
         configuration.allowsCellularAccess = true

@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Testing
 
 struct ListDiffTests {

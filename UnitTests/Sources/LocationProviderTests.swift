@@ -6,7 +6,7 @@
 //
 
 import CoreLocation
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Testing
 
 struct LocationProviderTests {

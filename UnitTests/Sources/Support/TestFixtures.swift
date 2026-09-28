@@ -6,7 +6,7 @@
 //
 
 import Combine
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Foundation
 import MatrixRustSDK
 
@@ -106,8 +106,8 @@ extension LiveLocationSummary {
     }
 }
 
-extension ElementXWatch.TimelineItem {
-    static func event(_ id: String, body: String, isOwn: Bool = false) -> ElementXWatch.TimelineItem {
-        ElementXWatch.TimelineItem(id: id, kind: .event(.fixture(eventID: "$\(id)", body: body, isOwn: isOwn)))
+extension AetherXWatch.TimelineItem {
+    static func event(_ id: String, body: String, isOwn: Bool = false) -> AetherXWatch.TimelineItem {
+        AetherXWatch.TimelineItem(id: id, kind: .event(.fixture(eventID: "$\(id)", body: body, isOwn: isOwn)))
     }
 }

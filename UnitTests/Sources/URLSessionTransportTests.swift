@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Foundation
 import MatrixRustSDK
 import Testing
@@ -56,7 +56,7 @@ struct URLSessionTransportTests {
     func clampsAnUnboundedSDKTimeoutToTheResourceTimeout() throws {
         let request = try URLSessionTransport.makeURLRequest(from: .init(method: "GET", url: "https://example.org", headers: [], body: Data(), timeoutMs: UInt64.max))
         #expect(request.timeoutInterval == 300)
-        #expect(URLSessionConfiguration.elementXWatch.timeoutIntervalForResource == 300)
+        #expect(URLSessionConfiguration.aetherXWatch.timeoutIntervalForResource == 300)
     }
 
     @Test

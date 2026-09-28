@@ -1,5 +1,5 @@
 import CompoundDesignTokens
-@testable import ElementXWatch
+@testable import AetherXWatch
 import MatrixRustSDK
 import SwiftUI
 import Testing

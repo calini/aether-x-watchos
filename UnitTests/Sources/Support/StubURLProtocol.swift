@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-@testable import ElementXWatch
+@testable import AetherXWatch
 import Foundation
 import Synchronization
 
@@ -25,7 +25,7 @@ nonisolated final class StubURLProtocol: URLProtocol {
     }
 
     static func configuration() -> URLSessionConfiguration {
-        // .ephemeral, not .elementXWatch: on this simulator (confirmed on watchOS 27.0 and 26.5) a
+        // .ephemeral, not .aetherXWatch: on this simulator (confirmed on watchOS 27.0 and 26.5) a
         // session built from URLSessionConfiguration.default only sometimes consults a registered
         // URLProtocol at all, even for GET.
         let configuration = URLSessionConfiguration.ephemeral

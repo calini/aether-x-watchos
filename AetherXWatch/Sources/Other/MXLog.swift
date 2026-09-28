@@ -9,7 +9,7 @@ import OSLog
 
 /// App-wide logging. Never pass secrets, tokens or message content.
 nonisolated enum MXLog {
-    private static let logger = Logger(subsystem: "io.ilie.elementx.watch", category: "app")
+    private static let logger = Logger(subsystem: "io.ilie.aetherx.watch", category: "app")
 
     static func verbose(_ message: @autoclosure () -> String, file: String = #fileID, line: Int = #line) {
         let text = message()

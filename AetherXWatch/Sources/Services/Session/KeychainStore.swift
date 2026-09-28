@@ -27,7 +27,7 @@ nonisolated final class KeychainStore: KeychainStoreProtocol {
          kSecAttrAccount as String: Self.account]
     }
 
-    init(service: String = "io.ilie.elementx.watch.sessions") {
+    init(service: String = "io.ilie.aetherx.watch.sessions") {
         self.service = service
     }
 
