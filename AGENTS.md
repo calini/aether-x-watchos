@@ -21,3 +21,4 @@
 - Tests: Swift Testing. Test cases first, helpers below.
 - Order in types: properties → `init` → functions. Views: properties → `init` → `body` → views → functions.
 - Every file derived from element-x-ios gets a row in `SHARED_FROM_IOS.md`.
+- File headers: new files use `Copyright <year> Calin Ilie.` + `SPDX-License-Identifier: AGPL-3.0-only.`; files derived from element-x-ios keep their original Element / New Vector header.

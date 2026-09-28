@@ -115,4 +115,4 @@ Syncing some state with the iPhone app, such as notification settings.
 
 ## Licence
 
-AGPL-3.0; see [LICENSE](LICENSE). Code ported from Element X iOS keeps its original `AGPL-3.0-only OR LicenseRef-Element-Commercial` headers.
+AGPL-3.0; see [LICENSE](LICENSE). This project's own code is © Calin Ilie, under `AGPL-3.0-only`. Code ported from Element X iOS (listed in [SHARED_FROM_IOS.md](SHARED_FROM_IOS.md)) keeps its original Element / New Vector copyright and `AGPL-3.0-only OR LicenseRef-Element-Commercial` headers.
