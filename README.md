@@ -14,7 +14,7 @@ This isn't a from-scratch client. It is a new watchOS app that borrows as much o
 
 - **The same Rust core:** matrix-rust-sdk through its Swift bindings (`matrix-sdk-ffi`). It covers end-to-end encryption, sliding sync, the timeline, the send queue, media, QR login and live location.
 - **The same app architecture:** MVVM-C screens (view, view model, coordinator), flow coordinators, `StateStoreViewModelV2`, Sourcery-generated mocks and Swift Testing.
-- **The same design language:** Compound colour and icon tokens, and Element's app icon.
+- **The same design language:** Compound colour and icon tokens, with Aether's teal as the accent.
 - **Ported code:** services and helpers copied from element-x-ios and adapted, with each one and its changes listed in [SHARED_FROM_IOS.md](SHARED_FROM_IOS.md). The screens are rebuilt for the watch: small, glanceable, Liquid Glass buttons, and Digital Crown support.
 
 ### What we swapped out, and why
