@@ -12,7 +12,7 @@ import MatrixRustSDK
 nonisolated enum WatchAppSettings {
     static let defaultServerName = "matrix.org"
     static let keychainService = "io.ilie.aetherx.watch.sessions"
-    static let userAgent = "AetherXWatch/0.1.0 (watchOS)"
+    static let userAgent = "AetherXWatch/0.4.0 (watchOS)"
 
     /// OAuth client metadata for dynamic registration with the account's MAS.
     /// All URIs share one host, as MAS requires; the redirect is never used by the device-code QR flow.
