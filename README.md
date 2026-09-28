@@ -1,5 +1,9 @@
 # Aether X watchOS
 
+<p align="center">
+  <img src="AetherXWatch/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png" alt="Aether X app icon" width="160">
+</p>
+
 A standalone Apple Watch client for [Matrix](https://matrix.org), built on the same [matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk) as [Element X iOS](https://github.com/element-hq/element-x-ios). It signs in, syncs, sends and receives on its own. Your iPhone doesn't need to be nearby.
 
 **Status:** an early personal project (v0.4.0), sideloaded onto the author's Apple Watch. It isn't affiliated with or supported by Element.
