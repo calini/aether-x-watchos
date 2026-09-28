@@ -21,7 +21,7 @@ struct AvatarView: View {
     var body: some View {
         ZStack {
             Circle().fill(Color.compound.bgAccentRest)
-            Text(initials).font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
+            Text(initials).font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(Color.compound.textOnSolidPrimary)
             if let image {
                 Image(uiImage: image).resizable().scaledToFill()
             }

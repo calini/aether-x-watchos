@@ -27,7 +27,7 @@ A watch has different rules from a phone, so a few pieces had to be replaced:
 | Prebuilt `MatrixRustSDK` package | The SDK fork [calini/matrix-rust-sdk](https://github.com/calini/matrix-rust-sdk), built locally for watchOS | The transport lives in the fork until it can go upstream (see below). |
 | MapLibre maps | MapKit (`MKMapSnapshotter` previews, SwiftUI `Map`) | Built into watchOS, no extra dependency. |
 | SwiftOGG + prebuilt libopus/libogg for voice messages | Apple's own Opus codec (`AVAudioConverter`) + a small Swift Ogg writer and reader | The prebuilt libraries exist only for iOS and macOS. The watch has an Opus codec, so only the Ogg file format was missing. Messages stay Ogg Opus, which Element X plays. |
-| compound-ios (UIKit components, light and dark palettes) | Compound design tokens only, with the dark values as defaults | watchOS asset catalogs ignore the dark appearance, so the light colours showed up instead. [`Tools/make-compound-colors-dark.py`](Tools/make-compound-colors-dark.py) fixes that. |
+| compound-ios (UIKit components, light and dark palettes) | Compound design tokens only, with the dark values as defaults | watchOS asset catalogs ignore the dark appearance, so the light colours showed up instead. [`Tools/make-compound-colors-dark.py`](Tools/make-compound-colors-dark.py) fixes that. The accent is Aether's teal (#33D8DD) instead of Element's green, via [`Tools/make-compound-accent-aether.py`](Tools/make-compound-accent-aether.py). |
 | Sentry crash reporting | Compiled in but never started (or left out on the arm64_32 build) | It would open its own connections. |
 
 ### The SDK fork, and a side-step for older watches

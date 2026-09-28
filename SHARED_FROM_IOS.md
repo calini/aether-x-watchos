@@ -4,7 +4,7 @@ Source commit: `ad1d7a301` (element-x-ios `develop`, 2026-09-25). Licence: AGPL-
 
 | Watch file | Source | Changes |
 |---|---|---|
-| `Packages/CompoundDesignTokens/Sources/CompoundDesignTokens/*` | compound-design-tokens `v11.0.0` `assets/ios/swift` | Dropped `CompoundCoreUIColorTokens.swift`, `CompoundUIColorTokens.swift` (UIKit-only) and `Resources/theme.iife.js`. `Colors.xcassets` rewritten by `Tools/make-compound-colors-dark.py` so the dark values are the defaults (watchOS ignores the dark appearance and would otherwise use the light values). |
+| `Packages/CompoundDesignTokens/Sources/CompoundDesignTokens/*` | compound-design-tokens `v11.0.0` `assets/ios/swift` | Dropped `CompoundCoreUIColorTokens.swift`, `CompoundUIColorTokens.swift` (UIKit-only) and `Resources/theme.iife.js`. `Colors.xcassets` rewritten by `Tools/make-compound-colors-dark.py` so the dark values are the defaults (watchOS ignores the dark appearance and would otherwise use the light values). `Tools/make-compound-accent-aether.py` then adds an `aether` scale (#33D8DD) and points the accent tokens at it; success tokens stay green. |
 | `AetherXWatch/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png` | `ElementX/Resources/AppIcon.icon/Assets/AppIcon.png` | Same artwork, saved without the alpha channel; watchOS masks it to a circle. |
 | `AetherXWatch/Sources/Other/Compound+Watch.swift` (`bgBubbleIncoming`, `bgBubbleOutgoing`) | compound-ios `Sources/Compound/Colors/CompoundColors.swift` (`_bgBubbleIncoming`, `_bgBubbleOutgoing`) | Dark values only. |
 | `Tools/Sourcery/AutoMockable.stencil` | `Tools/Sourcery/AutoMockable.stencil` | Removed iOS-only imports. |

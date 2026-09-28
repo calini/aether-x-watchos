@@ -25,7 +25,7 @@ struct FullWidthButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         if #available(watchOS 26, *) {
             label(configuration)
-                .foregroundStyle(isProminent ? Color.white : Color.compound.textPrimary)
+                .foregroundStyle(isProminent ? Color.compound.textOnSolidPrimary : Color.compound.textPrimary)
                 .glassEffect(glass, in: .capsule)
                 .opacity(isEnabled ? 1 : 0.4)
         } else {

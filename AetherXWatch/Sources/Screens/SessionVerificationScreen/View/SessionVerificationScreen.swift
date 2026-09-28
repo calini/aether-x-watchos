@@ -34,7 +34,7 @@ struct SessionVerificationScreen: View {
         case .comparing(let data):
             Text(WatchStrings.verifyCompare).font(.headline).multilineTextAlignment(.center)
             dataView(data)
-            Button(WatchStrings.theyMatch) { context.send(viewAction: .match) }.tint(Color.compound.bgAccentRest)
+            Button(WatchStrings.theyMatch) { context.send(viewAction: .match) }.tint(Color.compound.bgSuccessRest)
             Button(WatchStrings.theyDontMatch, role: .destructive) { context.send(viewAction: .noMatch) }
         case .confirming:
             ProgressView()
